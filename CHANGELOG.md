@@ -2,6 +2,17 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.9.1 · 2026-11-09
+
+Fixes from the first full run of the behaviour evals.
+
+- **Hostile job ads are flagged.** `/interviewly:target` ignores instructions aimed at AI tools in a job ad, as before, and now also tells you they were there.
+- **Honest fit statuses.** A job requirement is only **Strong** when your own code shows it at the depth the job asks for. Thin evidence (two tests for "writing tests") or a CV-only claim is Partial.
+- **Resume picks up where you paused.** `/interviewly:interview resume` asks the unanswered question again first, and no longer skips a planned topic because another session covered it.
+- **One question per lesson.** larp-it's "where to look" pointer is now a statement, so each lesson message asks exactly one question.
+- **Shorter CV refusals.** When you ask the CV rewrite to add something untrue, it says first, in a sentence each, what it left out and an honest alternative.
+- **Evals.** The drill grader accepts the helper called through a variable; the larp-it and CV-refusal graders say what the skills allow.
+
 ## 0.9.0 · 2026-11-09
 
 A full audit (security, privacy, scripts, the CV pipeline, the skills, job-search effectiveness and release readiness), with every fix independently reviewed.

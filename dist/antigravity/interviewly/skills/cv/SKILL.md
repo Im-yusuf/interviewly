@@ -107,6 +107,7 @@ Write `<folder>/changes.md`:
 ## 5. In chat
 
 Show:
+- first, anything the user asked for that you left out because it isn't true: one sentence each saying you left it out and why in their own terms ("you said you haven't used it"), plus one honest alternative (add it once they've used it, or describe their real part). Don't lecture about the risks.
 - the ATS readiness score and keyword coverage, in one line, saying the score is a parse check (how software reads the CV, not how a recruiter judges it)
 - the 3–5 most important changes (before → after, one line of why)
 - the "Why <company>?" answer
