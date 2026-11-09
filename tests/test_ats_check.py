@@ -213,7 +213,9 @@ class AtsCheckTest(unittest.TestCase):
             self.assertTrue(ats_check.is_skills_section(skills), skills)
 
     def test_cli_works_on_a_cp1252_console(self):
-        code, out, err = self.run_cli(self.write(FRENCH), "--keywords", "数据分析,Пайтон", env=CP1252)
+        # Windows hands Python its arguments as Unicode, but Linux decodes them with the locale, which would garble
+        # these keywords before the script saw them. So the arguments stay UTF-8 here; the console is still cp1252.
+        code, out, err = self.run_cli(self.write(FRENCH), "--keywords", "数据分析,Пайтон", env={**CP1252, "LC_ALL": "C.UTF-8"})
         self.assertEqual(code, 0, err)
         self.assertIn("✓ keywords: 100%", out)
         code, out, err = self.run_cli(self.write(MESSY, "m.md"), env=CP1252)
