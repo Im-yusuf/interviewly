@@ -161,7 +161,7 @@ git clone https://github.com/Im-yusuf/interviewly
 
 </details>
 
-**You'll need** Python 3.8+ and git. For private GitHub repos, the GitHub CLI (`gh`) helps. Works on macOS and Linux; Windows should work but hasn't been tested.
+**You'll need** Python 3.8+ and git. For private GitHub repos, the GitHub CLI (`gh`) helps. Works on macOS and Linux. On Windows the scripts pass their tests, but the full flow hasn't been tried yet.
 
 ## Honest by design
 

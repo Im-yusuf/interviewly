@@ -186,4 +186,4 @@ Removing the plugin keeps your data in `~/.interviewly` until you [delete it](#d
 
 - **Python 3.8+** and **git**
 - **Optional:** the GitHub CLI (`gh`) for private repos, and Chrome, Chromium, Edge or Brave for CVs in right-to-left scripts or with characters the built-in writer's font lacks
-- Tested on macOS and Linux. Windows should work but hasn't been tested.
+- Tested on macOS and Linux. On Windows, CI runs the unit tests, but the skills haven't been tried end to end there yet.

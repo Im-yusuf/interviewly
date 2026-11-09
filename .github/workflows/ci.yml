@@ -17,8 +17,6 @@ jobs:
     name: test (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    # Windows is untested so far: its results show, but don't fail the run yet.
-    continue-on-error: ${{ startsWith(matrix.os, 'windows') }}
     strategy:
       fail-fast: false
       matrix:
