@@ -1,0 +1,164 @@
+<!doctype html>
+<!--
+  Source for docs/larp-it.png (the README's larp-it image). The plan and the lesson are real
+  output from `/interviewly:larp-it fastapi-todo` on the example project, trimmed to fit. Re-render with:
+
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --hide-scrollbars --force-device-scale-factor=2 --default-background-color=00000000 \
+    --window-size=1280,640 --screenshot=docs/larp-it.png "file://$PWD/docs/larp-it-card.html"
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Interviewly larp-it card</title>
+<style>
+  :root {
+    --bg: #15161a;
+    --panel: #1b1d22;
+    --line: rgba(255, 255, 255, 0.08);
+    --text: #ececef;
+    --muted: #8d93a0;
+    --soft: #b8bec9;
+    --accent: #d97757;
+    --code: #f2c48d;
+    --amber: #e3b341;
+    --red: #f47067;
+    --green: #6bc46d;
+    --blue: #6cb6ff;
+    --ui: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: transparent; }
+  body { padding: 36px 40px 44px; font-family: var(--ui); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  .window {
+    width: 1200px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.2);
+  }
+  .titlebar {
+    height: 46px; display: flex; align-items: center; padding: 0 18px;
+    border-bottom: 1px solid var(--line); position: relative;
+  }
+  .dots { display: flex; gap: 8px; }
+  .dots span { width: 12px; height: 12px; border-radius: 50%; }
+  .dots span:nth-child(1) { background: #ff5f57; }
+  .dots span:nth-child(2) { background: #febc2e; }
+  .dots span:nth-child(3) { background: #28c840; }
+  .title {
+    position: absolute; left: 0; right: 0; text-align: center;
+    font-size: 13px; color: var(--muted); letter-spacing: 0.01em;
+  }
+  .title b { color: var(--soft); font-weight: 600; }
+
+  .body { display: grid; grid-template-columns: 1fr 440px; }
+
+  .plan { padding: 26px 34px 30px; display: flex; flex-direction: column; gap: 18px; }
+  .prompt { font-family: var(--mono); font-size: 14px; color: var(--muted); }
+  .prompt .caret { color: var(--accent); margin-right: 8px; }
+  .prompt .cmd { color: var(--text); }
+  .lead { font-size: 17px; line-height: 1.5; color: var(--text); }
+  .lead b { font-weight: 600; }
+
+  ol { list-style: none; display: flex; flex-direction: column; }
+  ol li {
+    display: grid; grid-template-columns: 30px 1fr auto; align-items: baseline; gap: 6px;
+    padding: 10px 0; border-top: 1px solid var(--line); font-size: 15.5px; line-height: 1.4; color: var(--soft);
+  }
+  ol li .n { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  ol li.now { color: var(--text); }
+  ol li.now .n { color: var(--accent); }
+  .tag {
+    font-size: 11.5px; font-weight: 600; white-space: nowrap; padding: 3px 9px; border-radius: 999px;
+  }
+  .tag.risk { color: var(--red); background: rgba(244, 112, 103, 0.12); border: 1px solid rgba(244, 112, 103, 0.3); }
+  .tag.now { color: var(--accent); background: rgba(217, 119, 87, 0.13); border: 1px solid rgba(217, 119, 87, 0.32); }
+
+  code {
+    font-family: var(--mono); font-size: 0.86em; color: var(--code);
+    background: rgba(255, 255, 255, 0.06); border-radius: 5px; padding: 1px 6px;
+    white-space: nowrap;
+  }
+
+  .card {
+    background: var(--panel); border-left: 1px solid var(--line);
+    padding: 26px 28px 28px; display: flex; flex-direction: column;
+  }
+  .card .label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+  }
+  .card h3 { font-size: 22px; font-weight: 650; line-height: 1.3; margin: 10px 0 18px; letter-spacing: -0.01em; }
+  .step { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .step svg { width: 18px; height: 18px; margin-top: 2px; }
+  .step h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .step p { font-size: 14px; line-height: 1.5; color: var(--soft); }
+  .step .ref { display: block; font-family: var(--mono); font-size: 12.5px; color: var(--code); margin-top: 3px; }
+  .step.read h4 { color: var(--blue); }
+  .step.look h4 { color: var(--amber); }
+  .step.ask h4 { color: var(--green); }
+  .step.ask p { color: var(--text); font-size: 16px; }
+
+  .foot { margin-top: auto; padding-top: 14px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="title"><b>Interviewly</b> · larp it · Taskly API</div>
+    </div>
+
+    <div class="body">
+      <div class="plan">
+        <div class="prompt"><span class="caret">›</span><span class="cmd">/interviewly:larp-it fastapi-todo</span></div>
+        <p class="lead">Your <b>Taskly API</b> plan is saved: <b>8 lessons, about 10 minutes each</b>, riskiest parts in the middle.</p>
+        <ol>
+          <li class="now"><span class="n">1</span><span>How a POST /todos becomes a database row</span><span class="tag now">Now</span></li>
+          <li><span class="n">2</span><span>The data model: the <code>Todo</code> table and the three schemas</span><span></span></li>
+          <li><span class="n">3</span><span>API keys and per-user isolation</span><span></span></li>
+          <li><span class="n">4</span><span><code>async def</code> handlers with a sync Session</span><span class="tag risk">High explain-risk</span></li>
+          <li><span class="n">5</span><span>Reminder emails with BackgroundTasks</span><span class="tag risk">High explain-risk</span></li>
+          <li><span class="n">6</span><span>Edge cases: PATCH with <code>null</code>, negative <code>limit</code></span><span></span></li>
+          <li><span class="n">7</span><span>Tests: <code>dependency_overrides</code>, <code>StaticPool</code></span><span></span></li>
+          <li><span class="n">8</span><span>Running it: Docker, config, and whether it runs on Postgres</span><span></span></li>
+        </ol>
+      </div>
+
+      <aside class="card">
+        <div class="label">Lesson 1 of 8</div>
+        <h3>How a POST /todos becomes a database row</h3>
+
+        <div class="step read">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#6cb6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>
+          <div>
+            <h4>Read in your editor</h4>
+            <p><span class="ref">app/routers/todos.py:27-40</span><span class="ref">app/deps.py:10-25</span></p>
+          </div>
+        </div>
+
+        <div class="step look">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#e3b341" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <div>
+            <h4>What to look for</h4>
+            <p>The handler's four parameters, and where each one gets its value.</p>
+          </div>
+        </div>
+
+        <div class="step ask">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#6bc46d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <div>
+            <h4>Your turn</h4>
+            <p>In two or three sentences, what does this code do?</p>
+          </div>
+        </div>
+
+        <div class="foot">You explain first. Then predict, trace, and answer the interview question.</div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

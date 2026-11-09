@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "interviewly",
   "version": "0.8.0",
-  "description": "Interview prep that reads your CV and your real code: mock interviews with real follow-ups, project study guides, walkthrough practice, an honest CV check and daily drills. Vibe coded it? Larp it till you make it: learn the code until you can explain every line.",
+  "description": "Mock interviews about your own code. Interviewly reads your CV and your projects, asks the follow-ups real interviewers ask, checks every CV claim, and turns code you vibe coded into 10-minute lessons. You built it. Now explain it.",
   "author": {
     "name": "Im-yusuf",
     "url": "https://github.com/Im-yusuf"
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "Interviewly",
     "shortDescription": "You built it. Now explain it.",
-    "longDescription": "Give Interviewly a job description and your CV. It reads your real project code, predicts the questions you'll get with answers from your own work, runs mock interviews with real follow-ups, and teaches you the parts of your projects you can't explain yet, including code you built with AI.",
+    "longDescription": "Give Interviewly your CV and a job ad. It reads your projects, predicts the questions you'll get, asks follow-ups like a real interviewer, checks every CV claim against your code, and turns the parts you vibe coded into 10-minute lessons, until you can explain every line.",
     "developerName": "Im-yusuf",
     "category": "Productivity",
     "websiteURL": "https://github.com/Im-yusuf/interviewly",

@@ -1,6 +1,6 @@
 {
   "name": "interviewly",
-  "description": "You built it. Now explain it. Interview prep grounded in your CV and your real code.",
+  "description": "You built it. Now explain it. Mock interviews about your own code.",
   "owner": {
     "name": "Im-yusuf",
     "url": "https://github.com/Im-yusuf"
@@ -9,7 +9,7 @@
     {
       "name": "interviewly",
       "source": "./",
-      "description": "Interview prep that reads your CV and your real code: mock interviews with real follow-ups, project study guides, walkthrough practice, an honest CV check and daily drills. Vibe coded it? Larp it till you make it: learn the code until you can explain every line.",
+      "description": "Mock interviews about your own code. Interviewly reads your CV and your projects, asks the follow-ups real interviewers ask, checks every CV claim, and turns code you vibe coded into 10-minute lessons. You built it. Now explain it.",
       "category": "productivity",
       "homepage": "https://github.com/Im-yusuf/interviewly"
     }

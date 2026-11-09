@@ -7,7 +7,7 @@ All notable changes to Interviewly. Versions follow [semantic versioning](https:
 - **Who wrote what.** Setup reads each project's git history (authors, AI `Co-Authored-By` trailers, AI tool files such as `CLAUDE.md` or `.cursorrules`) and marks the parts you're least likely to be able to explain yet. You confirm which git identities are yours; the result is a signal, not a verdict.
 - **`/interviewly:larp-it`.** Vibe coded it? Larp it till you make it: learn your own codebase in 10-minute lessons, riskiest parts first: read a little, explain it back, predict what happens, answer the interview question. `larp-it <project> <file>` tutors one file or function.
 - **An honest answer to "how did you use AI?".** `/interviewly:stories` drafts one from your history, tougher interviewers ask it, and the reviewer flags answers that claim more authorship than the code shows.
-- **Ready to publish.** A new README, CI on Python 3.8 and 3.12, contributing and security notes, issue templates, and sharper skill descriptions.
+- **Ready to publish.** A new README and a [how it works](docs/how-it-works.md) guide, CI on Python 3.8 and 3.12, contributing and security notes, issue templates, and sharper skill descriptions.
 - **Your target's gaps come first.** New drill topics for a skill the job asks for that you haven't used yet now arrive before topics about projects the job analysis cites as evidence.
 - **Fixes.** UTF-8 everywhere (Windows consoles included), better reading of RTF, Word, ODT and PDF CVs (encrypted PDFs get a clear message), CVs without `##` sections and in other languages, safer audit bookkeeping, and long words and tall blocks in the built-in PDF writer.
 
