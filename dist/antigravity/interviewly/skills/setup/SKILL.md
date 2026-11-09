@@ -84,7 +84,7 @@ Show:
 3. The number of CV claims with no evidence in the code.
 4. How each project was built, in one line each from its **How it was built** section (e.g. "Taskly: 60% of lines added with an AI assistant; 2 components you'll likely struggle to explain"). Neutral, never judgemental.
 5. What to do next:
-   - `/interviewly:learn <project>`: short lessons on the parts of your code you can't explain yet (recommend it when a project has high explain-risk components)
+   - `/interviewly:larp-it <project>`: short lessons on the parts of your code you can't explain yet (recommend it when a project has high explain-risk components)
    - `/interviewly:breakdown <project>`: a written study guide to your project
    - `/interviewly:interview`: a mock interview
    - `/interviewly:audit`: check your CV claims before an interviewer does

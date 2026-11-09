@@ -29,7 +29,7 @@ Interview readiness: 62 / 100   ·   🔥 4-day streak   ·   Acme interview in 
    1. The interview is within 2 days → `/interviewly:drill` today, plus one `/interviewly:interview mixed` with the target's likeliest interviewer
    2. No interview sessions yet → `/interviewly:interview <strongest project for the target> deep-dive`
    3. 5 or more reviews due, or new topics waiting and nothing practised today → `/interviewly:drill`
-   4. A project the target cares about has high **Explain-risk** components and no finished plan in `learning/<slug>.json` → `/interviewly:learn <project>`
+   4. A project the target cares about has high **Explain-risk** components and no finished plan in `learning/<slug>.json` → `/interviewly:larp-it <project>`
    5. A must-have skill for the target is untested, below 40, or not in the profile at all → `/interviewly:prep <skill>` if `guides/<skill-slug>.md` doesn't exist yet; otherwise `/interviewly:interview <skill-slug> fundamentals`, since the guide is already written
    6. A project with readiness below 50 → `/interviewly:breakdown <project>`
    7. No `stories.md`, or its coverage matrix has a gap → `/interviewly:stories`

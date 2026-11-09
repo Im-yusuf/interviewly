@@ -88,7 +88,9 @@ In quick mode, setup, target, audit and breakdown ask the user nothing and end w
 
 **When the background work reports back:**
 - **If a mock interview is running** (they chose *Practice now*), don't interrupt it. If you're waiting for their answer, post nothing about it: end your turn and keep waiting. Hold the notice until the current question thread (the question and its follow-ups) is finished, then give it in one line, out of character, before the next question: "Your full profile is ready, so the next questions draw on your code."
-- **Otherwise,** tell the user in two lines what's ready and where.
+- **Otherwise,** tell the user in two lines what's ready and where, then follow through on what they chose:
+  - *Likely questions:* show 3 questions from the full guide that the quick list didn't have, preferring ones about their code, each with the first sentence of its answer and a file reference. Then ask with options: **Practise these now (Recommended)** · **Check my CV first**. Practising runs the `interviewly:interview` skill with arguments `mixed coach 5`.
+  - *Check my CV* or *Learn my projects:* give the most important finding in one line, then offer the natural next step the same way (`/interviewly:cv` after an audit, `/interviewly:walkthrough <project>` after a study guide).
 
 ### The full question guide
 

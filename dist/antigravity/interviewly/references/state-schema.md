@@ -39,7 +39,7 @@ The skills call this `iv`. (If `${CLAUDE_PLUGIN_ROOT}` wasn't filled in, it's th
 | `iv seed` | Add topics from a JSON list on stdin: `[{"id", "label", "skill", "project", "question", "answer_hint"}]`. They're **new** (untested): `iv due` introduces a few a day. Ids that already exist are skipped. |
 | `iv score <id> <1-4> --source <file> [--label --question --answer-hint --skill --project]` | Record a score and reschedule (creates the topic if it's new). Prints the new `next_due`. |
 | `iv apply <session.json>` | Score and reschedule every thread in a reviewed session; writes `scheduled` back into the JSON. |
-| `iv due [--limit N] [--match TEXT] [--fill] [--new N] [--json]` | Today's queue, each with a `kind`: reviews due (`review`, weakest first), then today's new topics (`new`, a few a day, the active target's first; `--new` overrides how many), then with `--fill` the weakest practised topics not yet due (`extra`). |
+| `iv due [--limit N] [--match TEXT] [--fill] [--new N] [--json]` | Today's queue, each with a `kind`: reviews due (`review`, weakest first), then today's new topics (`new`, a few a day: the active target's gaps first, then the CV-only skills it mentions, then what it mentions most; `--new` overrides how many), then with `--fill` the weakest practised topics not yet due (`extra`). |
 | `iv streak --json` · `iv stats --json` | Practice streak; readiness per skill and project, sessions, weakest topics. |
 | `iv report <session.json> [--open]` · `iv dashboard [--open]` · `iv share <session.json>` | HTML report card, progress dashboard, and a 1200×630 share image, all written to `reports/`. |
 | `iv check` | Validate every JSON file. Run it after writing JSON yourself. |
@@ -63,7 +63,7 @@ HOME_DIR/
 │   └── <skill-slug>.md     written by /interviewly:prep
 ├── targets/<slug>.md       job-description analyses (/interviewly:target)
 ├── debriefs/<YYYY-MM-DD>-<target-or-company>-<round>.md   real-interview debriefs
-├── learning/<slug>.json    the /interviewly:learn plan and progress for one project
+├── learning/<slug>.json    the /interviewly:larp-it plan and progress for one project
 ├── audit.md                CV claim audit (/interviewly:audit), rendered from audit.json by `iv audit-merge`
 ├── audit.json              every assessed CV line by id (a hash of its text), with its risk, evidence and when it was last checked
 ├── cv/<slug>/             rewritten CV for a target or "general" (/interviewly:cv): <First>-<Last>-CV.pdf (the one
@@ -116,7 +116,7 @@ Slugs are lowercase kebab-case: `fastapi-todo`, `ffmpeg`, `acme-backend-engineer
 ```
 
 - `target_level`: `junior` | `mid` | `senior` | `staff`.
-- `git_identities`: the names and emails the user commits under, confirmed in setup. `scripts/provenance.py --me` uses them to split each repo's history into the user's own lines, the user's lines in AI-credited commits, and other people's. Each dossier then gets **How it was built** and **Explain-risk** sections (see `agents/project-analyst.md`), which `/interviewly:learn`, the interview and the audit use.
+- `git_identities`: the names and emails the user commits under, confirmed in setup. `scripts/provenance.py --me` uses them to split each repo's history into the user's own lines, the user's lines in AI-credited commits, and other people's. Each dossier then gets **How it was built** and **Explain-risk** sections (see `agents/project-analyst.md`), which `/interviewly:larp-it`, the interview and the audit use.
 - `cv_language`: the language the CV is written in, as a BCP 47 tag (`en-GB`, `en-US`, `fr-FR`, `de-DE`). Setup records it; the cv skill writes section headings in it and passes it to `cv_to_pdf.py --lang`.
 - `github`: the user's GitHub username, if they gave one during setup.
 - `active_target`: a slug in `targets/`, or `null`.
@@ -166,7 +166,7 @@ Slugs are lowercase kebab-case: `fastapi-todo`, `ffmpeg`, `acme-backend-engineer
 
 - `nudge`: `false` turns off the start-of-session reminder. It's on when missing.
 - `new_per_day`: how many never-practised topics are introduced each day (default 3). `/interviewly:drill new N` sets it.
-- `mode`: `deep-dive` | `fundamentals` | `behavioral` | `system-design` | `claims` | `mixed`. Session files can also be `drill`, `learn` (`/interviewly:learn`) or `walkthrough` (`/interviewly:walkthrough`, one thread with topic `<project>/walkthrough`).
+- `mode`: `deep-dive` | `fundamentals` | `behavioral` | `system-design` | `claims` | `mixed`. Session files can also be `drill`, `learn` (`/interviewly:larp-it`) or `walkthrough` (`/interviewly:walkthrough`, one thread with topic `<project>/walkthrough`).
 - `persona`: `recruiter` | `hiring-manager` | `senior` | `bar-raiser` | `system-design` (see `personas.md`).
 - `feedback`: `end` (realistic: no feedback until the end) or `each` (coach: short feedback after every question).
 

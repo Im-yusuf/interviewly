@@ -3,7 +3,7 @@
   "name": "interviewly",
   "displayName": "Interviewly",
   "version": "0.8.0",
-  "description": "Interview prep that reads your CV and your real code: mock interviews with real follow-ups, project study guides, walkthrough practice, an honest CV check and daily drills. Built it with AI? Learn it well enough to explain it.",
+  "description": "Interview prep that reads your CV and your real code: mock interviews with real follow-ups, project study guides, walkthrough practice, an honest CV check and daily drills. Vibe coded it? Larp it till you make it: learn the code until you can explain every line.",
   "logo": "icon.png",
   "suggestedPrompts": [
     "Help me prepare for this job: <paste the job description>",

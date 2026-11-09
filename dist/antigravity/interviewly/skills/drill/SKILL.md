@@ -26,7 +26,7 @@ Tell the user in one line: how many items there are, roughly how long it'll take
 ## 2. Run it
 
 For each item:
-1. Ask one **short** question that tests a single point and can be answered in 1–3 sentences:
+1. Ask one **short** question that tests a single point and can be answered in 1–3 sentences. Use one question mark: don't tack on "Why does that matter?" or a second ask (save the why for the follow-up after a score of 2):
    - Start from the topic's `question` field, reworded so they practise the idea and not a memorised answer.
    - If that question is a broad walkthrough ("walk me through…", "what happens step by step…"), don't ask it as it is. Ask about its single most important point, which `answer_hint` names. For example, ask "When does the reminder actually run, relative to the response being sent?" rather than "Walk me through POST /todos".
    - A `…/walkthrough` topic is the exception: ask for the 30-second version of that project's walkthrough.

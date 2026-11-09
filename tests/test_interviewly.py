@@ -117,6 +117,24 @@ class InterviewlyTest(unittest.TestCase):
         ids = [t["id"] for t in json.loads(self.run_cli("due", "--json"))]
         self.assertEqual(ids, ["db/b", "taskly/d", "misc/a"])
 
+    def test_the_jobs_gaps_come_before_what_it_cites_as_evidence(self):
+        """A skill the job asks for that the user hasn't used yet matters more than a project the job's analysis
+        names again and again as evidence."""
+        skills = [{"name": "PostgreSQL", "slug": "postgres", "status": "strong"},
+                  {"name": "Kafka", "slug": "kafka", "status": "gap"},
+                  {"name": "RAG", "slug": "rag", "status": "cv-only"},
+                  {"name": "Redis", "slug": "redis", "status": "gap"}]
+        self.write("profile.json", json.dumps({"active_target": "acme", "skills": skills}))
+        self.write("projects/index.json", json.dumps([{"name": "Taskly API", "slug": "taskly"}]))
+        self.write("targets/acme.md", "Taskly API, Taskly API, Taskly API and PostgreSQL. Must have: Kafka. Nice: RAG.\n")
+        self.run_cli("seed", stdin=json.dumps([{"id": "taskly/a", "project": "taskly"}]))
+        self.seed("db/b", skill="postgres")
+        self.seed("ai/c", skill="rag")
+        self.seed("cache/d", skill="redis")   # a gap from another job: this one doesn't mention it
+        self.seed("q/e", skill="kafka")
+        ids = [t["id"] for t in json.loads(self.run_cli("due", "--json", "--new", "5"))]
+        self.assertEqual(ids, ["q/e", "ai/c", "taskly/a", "db/b", "cache/d"])
+
     def test_apply_schedules_every_thread_and_writes_back(self):
         review = {"score": 2.5, "threads": [
             {"n": 1, "topic": "clip/seek", "score": 2, "label": "Seeking", "project": "clip"},

@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
-  <a href="#built-it-with-ai-learn-it-for-real">Built it with AI?</a> ·
+  <a href="#vibe-coded-it-larp-it-till-you-make-it">Vibe coded it?</a> ·
   <a href="#what-you-can-do">What you can do</a> ·
   <a href="#see-it-on-the-sample">Example</a> ·
   <a href="#honesty-and-privacy">Privacy</a> ·
@@ -29,7 +29,7 @@ Interviewers don't ask *"What is FastAPI?"*. They ask why your routes are `async
 **Who it's for**
 
 - Developers with interviews coming up who want practice on their own projects, not a question bank
-- Anyone who built a project with a lot of AI help and needs to understand it well enough to explain it
+- Vibe coders: anyone who built a project with a lot of AI help and now has to explain it
 - Students, juniors and career changers whose CV is mostly side projects
 - Anyone with a line on their CV they aren't sure they could defend
 
@@ -65,20 +65,20 @@ Restart Antigravity, then type `/interviewly:start`.
 
 **Needs** Python 3.8+ and git. Optional: the GitHub CLI (`gh`) for private repos, and Chrome, Chromium, Edge or Brave for the CV PDF (a built-in writer takes over without one). Tested on macOS and Linux; Windows should work but is untested.
 
-## Built it with AI? Learn it for real
+## Vibe coded it? Larp it till you make it
 
 Plenty of good projects are now built with an AI assistant writing much of the code. Interviewers know that. What they still test is whether you understand what you shipped: why the cache sits there, what happens when a job fails, what you'd change.
 
 - **See who wrote what.** Setup reads your git history (authors, `Co-Authored-By` trailers, AI tool files such as `CLAUDE.md` or `.cursorrules`) and marks the parts of each project you're least likely to be able to explain yet. They're signals you confirm, not a verdict.
-- **Learn it in 10-minute lessons.** `/interviewly:learn <project>` takes you through your own code, riskiest parts first: read a little, explain it back in your words, predict what happens, answer the interview question. `/interviewly:learn <project> <file>` tutors one file or function.
+- **Learn it in 10-minute lessons.** `/interviewly:larp-it <project>` takes you through your own code, riskiest parts first: read a little, explain it back in your words, predict what happens, answer the interview question. `/interviewly:larp-it <project> <file>` tutors one file or function.
 - **Have an honest answer ready.** Tougher interviewers ask *"How did you use AI on this?"*. `/interviewly:stories` helps you prepare a true answer: what you decided, what you rejected, what you caught and rewrote.
 
-It won't help you bluff. Model answers use only your code, your CV and what you've told it, the reviewer flags answers that claim more than you did, and the CV audit tells you which claims you can't back up yet.
+The name's a joke; the tool isn't. It won't help you bluff: model answers use only your code, your CV and what you've told it, the reviewer flags answers that claim more than you did, and the CV audit tells you which claims you can't back up yet.
 
 ## What you can do
 
 - 🎙️ **Mock interviews that follow up.** One question at a time, then deeper: *what → how → why → what if*. Pushes back on buzzwords, unexplained numbers and "we". Stuck? Coach mode turns a skip into a short lesson.
-- 📚 **Learn your own projects.** A study guide per project (pitches, an architecture diagram, what each part does and why, with answers that cite your files) and the guided `learn` lessons above.
+- 📚 **Learn your own projects.** A study guide per project (pitches, an architecture diagram, what each part does and why, with answers that cite your files) and the `larp-it` lessons above.
 - 🎤 **Practise "walk us through something you built".** Timed, followed up, scored, with a model version built from your code and a retry on the spot.
 - 🔍 **Check and fix your CV.** Flags claims your code doesn't back up, then rewrites the CV honestly for the job as one PDF that applicant tracking systems read cleanly.
 - 🎯 **Prepare for a specific job.** Maps every requirement to your experience, predicts the questions, and researches the company.
@@ -92,7 +92,7 @@ It won't help you bluff. Model answers use only your code, your CV and what you'
 | `/interviewly:start` | Start here: job ad, CV, then likely questions or practice |
 | `/interviewly:interview` | Mock interview with a scored report card |
 | `/interviewly:walkthrough [project]` | Practise walking through a project, timed and followed up |
-| `/interviewly:learn <project> [file]` | Learn your own code in short lessons, or get tutored on one file |
+| `/interviewly:larp-it <project> [file]` | Vibe coded it? Learn the code in 10-minute lessons, or one file at a time |
 | `/interviewly:breakdown <project>` | Written study guide for one project |
 | `/interviewly:prep <technology>` | Common questions for one technology, tied to how you used it |
 | `/interviewly:drill` | 5-minute drill: reviews you owe plus a few new topics |
@@ -194,7 +194,7 @@ repos ──► project-analyst agents (one per repo, in parallel) ──► dos
                     │   (architecture, decisions, weak spots, probe points,
                     │    CV claims vs code, who wrote what, explain-risk)
                     ▼
-   interview · walkthrough · learn · breakdown · prep · audit · cv · target · stories · drill · debrief
+   interview · walkthrough · larp-it · breakdown · prep · audit · cv · target · stories · drill · debrief
                     │
                     ▼
    session-reviewer agent ──► review JSON ──► interviewly.py ──► topics.json (spaced repetition)

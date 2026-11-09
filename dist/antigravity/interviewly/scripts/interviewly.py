@@ -151,20 +151,25 @@ def new_allowance(data, day):
 
 
 def relevance_scorer():
-    """Rank new topics by how often the active job's analysis mentions their skill or project."""
+    """Rank new topics for the active job, highest first: its gaps (skills it mentions that the user hasn't used
+    yet), then the CV-only skills it mentions, then by how often its analysis mentions the topic's skill or project.
+    Counting alone would bury a gap the job names once under the projects it cites as evidence again and again."""
     profile = load_json(home() / "profile.json", {})
     path = home() / "targets" / f"{profile.get('active_target')}.md"
     text = read_text(path, errors="ignore").lower() if profile.get("active_target") and path.exists() else ""
     names = {s.get("slug"): s.get("name") for s in profile.get("skills", [])}
+    status = {s.get("slug"): s.get("status") for s in profile.get("skills", [])}
     names.update({p.get("slug"): p.get("name") for p in load_json(home() / "projects" / "index.json", [])})
+    weak = {"gap": 2, "cv-only": 1}
 
     def score(topic):
         keys = set()
         for slug in (topic.get("skill"), topic.get("project")):
             if slug:
                 keys |= {slug.lower(), slug.lower().replace("-", " "), (names.get(slug) or "").lower()}
-        return sum(len(re.findall(rf"(?<![a-z0-9]){re.escape(k)}(?![a-z0-9])", text)) for k in keys if len(k) > 1)
-    return score if text else (lambda topic: 0)
+        mentions = sum(len(re.findall(rf"(?<![a-z0-9]){re.escape(k)}(?![a-z0-9])", text)) for k in keys if len(k) > 1)
+        return (weak.get(status.get(topic.get("skill")), 0) if mentions else 0, mentions)
+    return score if text else (lambda topic: (0, 0))
 
 
 def record_score(data, topic_id, score, source, fields, day):
@@ -198,7 +203,7 @@ def pick_due(data, day, limit=None, match=None, fill=False, new=None):
     queue = [dict(t, kind="review") for t in sorted((t for t in topics if is_due(t, day)), key=weakest)]
     allowance = new_allowance(data, day) if new is None else new
     score = relevance_scorer()
-    fresh = sorted((t for t in topics if is_new(t)), key=lambda t: -score(t))   # stable: keeps seeding order on ties
+    fresh = sorted((t for t in topics if is_new(t)), key=lambda t: tuple(-n for n in score(t)))   # stable: keeps seeding order on ties
     queue += [dict(t, kind="new") for t in fresh[:allowance]]
     if fill and limit and len(queue) < limit:
         rest = sorted((t for t in topics if not is_new(t) and not is_due(t, day)), key=weakest)

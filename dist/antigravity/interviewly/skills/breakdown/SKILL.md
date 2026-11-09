@@ -28,7 +28,7 @@ Write `HOME_DIR/guides/<slug>-breakdown.md` (or `<slug>-<component>-breakdown.md
 - **30 seconds:** what it is, who it's for, the one interesting technical thing. Write it to be said out loud.
 - **2 minutes:** problem → approach → architecture in one breath → the hardest part → the result.
 - **5 minutes:** the 2-minute version plus one deep dive and one "what I'd change".
-Write all three in the first person, naturally, with no buzzwords the user couldn't defend. If a CV claim can't be backed up from the code, leave it out of the pitch and flag it in section 7.
+Write all three in the first person, as the user would say them ("I built Taskly, a…", not "Taskly is a…"), naturally, with no buzzwords the user couldn't defend. If a CV claim can't be backed up from the code, leave it out of the pitch and flag it in section 7.
 
 ### 2. Architecture
 A Mermaid `flowchart` of the main components, then one paragraph of walkthrough.

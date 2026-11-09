@@ -11,3 +11,5 @@ Pass only if all of these hold:
 - It explains components with file references such as `app/routers/todos.py`.
 - It identifies that sync database calls inside `async def` routes block the event loop (or an equivalent explanation).
 - It does not claim the project uses PostgreSQL or async database access.
+
+Mentioning PostgreSQL or async database access as a CV claim the code doesn't back up, as an alternative, or as a suggested fix is expected and fine. Fail on that point only if the guide says the project uses them today.

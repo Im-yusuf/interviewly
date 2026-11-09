@@ -1,11 +1,14 @@
 ---
-name: learn
-description: Learn your own codebase for interviews, 10 minutes at a time: riskiest parts first, explain-back, predict-what-happens. Use when you built it with AI or can't explain parts of your project yet.
+name: larp-it
+description: Larp it till you make it. Learn a project you vibe coded or built with AI in 10-minute lessons, riskiest code first. Use for "larp it" or code on your CV you can't explain yet.
+argument-hint: "<project> [path[:function]] | plan | next"
 ---
 
-# Learn your own code
+# Larp it: learn your own code
 
 For a project the user shipped but can't fully explain yet, often because an AI assistant wrote much of it. The goal is real understanding, built in small lessons: they read a little code, explain it back in their own words, predict what it does, and answer the question an interviewer would ask. Never just lecture: the user does the explaining first.
+
+The name is the joke; the skill doesn't play along with it. It never helps the user fake knowledge: no scripts to memorise, no answers that claim more than they did. If they ask to sound like the author without learning the code, say in one line that interviewers find that out with the second follow-up, and start the lessons. The way to pass is to actually know it.
 
 Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
@@ -32,7 +35,7 @@ Save `HOME_DIR/learning/<slug>.json` as `{"project": "<slug>", "created": "<date
 
 Start `HOME_DIR/sessions/<YYYY-MM-DD-HHMM>-learn.md` (frontmatter `mode: learn`, `focus: <slug>`, `status: in-progress`) and log each exchange as it happens. One step per message; end your turn after each question.
 
-1. **Read.** Name the file(s) and line ranges and what to look for ("Read `create_todo` and the dependency it calls. Notice where the session comes from."). Ask them to open it in their editor; if they can't, show the excerpt (at most 40 lines, with line numbers). Then ask: "In two or three sentences, what does this code do?"
+1. **Read.** Name the file(s) and line ranges and one thing to look for: a single pointer to *where* to look, never a fact about what the code does ("Notice where the session comes from.", not "The session is injected by `get_db`."). Ask them to open it in their editor; if they can't, show the excerpt (at most 40 lines, with line numbers). Then ask: "In two or three sentences, what does this code do?" That is the only question in the message.
 2. **Explain back.** Score their explanation 1–4 against the code. Reply in at most 5 lines: what they got right, the one thing missing or wrong (with `path:line`), and the corrected idea in plain words. Don't add a lecture.
 3. **Predict.** Ask one "what happens if…" question about this code: bad input, a service down, two requests at once, a missing row. After they answer, give the real behaviour with the line that causes it. If running something would show it (a test, a one-line script), offer to run it, and run it only if they say yes.
 4. **Trace or extend.** One small exercise without editing their repo: list the functions a request passes through, in order; or say where they'd add a field, a check or a retry, and why there. Score it 1–4 and correct it briefly.
@@ -44,7 +47,7 @@ Then:
 
 When every lesson is done, say so, show the scores, and suggest `/interviewly:walkthrough <slug>` and then `/interviewly:interview <slug> deep-dive`.
 
-## 3. Tutor mode (`learn <project> <path[:function]>`)
+## 3. Tutor mode (`larp-it <project> <path[:function]>`)
 
 A focused session on one file or function, for code they know they can't explain.
 
