@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """Write a CV PDF directly, with no browser: layout, embedded TrueType fonts, links and tags.
 
-cv_to_pdf.py falls back to this when no browser can run (for example inside a sandbox that
-blocks the local socket Chrome needs). It draws the same design from the same parsed CV:
+cv_to_pdf.py uses this by default: macOS PDFKit and other parsers read its output in the
+same order as the page, and it needs no browser. It draws one design from the parsed CV:
 real text in a subset of Arial (or Liberation Sans or DejaVu Sans) embedded with a clean
 Unicode map, spaces drawn as real space characters, no ligatures, line breaks only at
 spaces, link annotations over the linked text, and tagged headings, paragraphs and lists.
-Standard library only.
+It has no bidi or shaping engine, so it refuses right-to-left and joined scripts (Arabic,
+Hebrew, Indic and similar) rather than print them reversed or unjoined; cv_to_pdf.py then
+uses Chrome. Standard library only.
 """
 import re
 import struct
 import time
+import unicodedata
 import zlib
 from pathlib import Path
 
@@ -184,43 +187,73 @@ def load_fonts():
 
 # ---------- layout ----------
 
+# Marks a font can place on its own: Latin, Greek and Cyrillic accents and other generic combining marks
+COMBINING_OK = ((0x0300, 0x036F), (0x1AB0, 0x1AFF), (0x1DC0, 0x1DFF), (0x20D0, 0x20FF), (0xFE20, 0xFE2F))
+
+
+def needs_shaping(ch):
+    """Right-to-left letters, and marks only a text-shaping engine places (Arabic, Hebrew, Indic, Thai)."""
+    if ord(ch) < 0x0300:
+        return False
+    if unicodedata.bidirectional(ch) in ("R", "AL", "AN"):
+        return True
+    return unicodedata.category(ch) in ("Mn", "Mc", "Me") and not any(a <= ord(ch) <= b for a, b in COMBINING_OK)
+
+
 class Fonts:
     def __init__(self):
         self.faces = load_fonts()
         self.used = {k: {} for k in self.faces}   # face -> {gid: char}
-        self.missing = set()
+        self.missing, self.unsupported = set(), set()
+
+    def gid(self, face, ch):
+        font = self.faces[face]
+        gid = font.cmap.get(ord(ch), 0)
+        if not gid and ch.isspace():
+            gid = font.cmap.get(32, 0)   # a space the font lacks is drawn as a plain space, not a box
+        elif not gid:
+            self.missing.add(ch)
+        if needs_shaping(ch):
+            self.unsupported.add(ch)
+        return gid
 
     def glyphs(self, face, text):
-        font, out = self.faces[face], []
+        out, used = [], self.used[face]
         for ch in text:
-            gid = font.cmap.get(ord(ch), 0)
-            if not gid and not ch.isspace():
-                self.missing.add(ch)
-            self.used[face].setdefault(gid, ch)
+            gid = self.gid(face, ch)
+            if gid not in used or unicodedata.category(used[gid]) == "Cf":   # a visible character names a shared glyph
+                used[gid] = ch
             out.append(gid)
         return out
 
     def width(self, face, text, size):
-        font, total = self.faces[face], 0
-        for c in text:
-            gid = font.cmap.get(ord(c), 0)
-            if not gid and not c.isspace():
-                self.missing.add(c)
-            total += font.advances[gid]
-        return total * size / font.upem
+        font = self.faces[face]
+        return sum(font.advances[self.gid(face, c)] for c in text) * size / font.upem
 
 
 def face_of(bold, italic):
     return ("B" if bold else "") + ("I" if italic else "") or "R"
 
 
-def pieces(runs, bold=False, color=TEXT, upper=False, nobreak=False, italic=True):
-    """Model runs -> [(text, face, url, color, nobreak)]."""
-    out = []
-    for text, b, it, url in runs:
-        text = text.replace("\u00a0", " ").replace("\t", " ").replace("\u2011", "-")
-        out.append((text.upper() if upper else text, face_of(b or bold, it and italic), url, color, nobreak))
-    return out
+# Tabs and spaces the font may lack become a plain space. Narrow and figure no-break spaces (French "10 000 €",
+# "6 h") become a no-break space, which wrap() never breaks at; a non-breaking hyphen becomes a hyphen.
+SPACE_MAP = dict.fromkeys((0x09, 0x1680, *range(0x2000, 0x2007), *range(0x2008, 0x200B), 0x2028, 0x2029, 0x205F, 0x3000),
+                          0x20)
+SPACE_MAP.update({0x2007: 0xA0, 0x202F: 0xA0, 0x2011: 0x2D})
+
+
+def tidy(text):
+    """Precomposed letters, spaces the font can draw, and no format characters (soft hyphens, zero-width
+    characters, direction marks): this writer can't act on them, and they split words for parsers."""
+    text = unicodedata.normalize("NFC", text).translate(SPACE_MAP)
+    return "".join(c for c in text if unicodedata.category(c) != "Cf")
+
+
+def pieces(runs, bold=False, color=TEXT, nobreak=False, italic=True):
+    """Model runs -> [(text, face, url, color, nobreak)]. A link that isn't a web, mail or phone address is dropped."""
+    return [(tidy(text), face_of(b or bold, it and italic), url if url and re.match(r"(?i)(https?|mailto|tel):", url) else None,
+             color, nobreak)
+            for text, b, it, url in runs]
 
 
 BREAK_AFTER = "/-?&=._#"
@@ -322,7 +355,7 @@ def build_boxes(model, density, fonts, width):
     for b in model:
         kind = b["kind"]
         if kind == "name":
-            boxes.append(text_box("H1", pieces(b["runs"], bold=True, upper=True), h1, 1.15, align="center"))
+            boxes.append(text_box("H1", pieces(b["runs"], bold=True), h1, 1.15, align="center"))
             header_end = len(boxes) - 1
         elif kind == "header":
             parts = []
@@ -333,7 +366,7 @@ def build_boxes(model, density, fonts, width):
             boxes.append(text_box("P", parts, fs * 0.94, align="center", top=2 * k))
             header_end = len(boxes) - 1
         elif kind == "section":
-            box = text_box("H2", pieces(b["runs"], bold=True, upper=True), fs + 0.5, 1.2, top=9 * k, bottom=3 * k, keep_next=True)
+            box = text_box("H2", pieces(b["runs"], bold=True), fs + 1.5, 1.2, top=9 * k, bottom=3 * k, keep_next=True)
             box.height += 1.5 + 1.2
             box.ops.append(("rule", 0, width, box.height - 0.6, 1.2))
             boxes.append(box)
@@ -457,6 +490,9 @@ class Layout:
         self.boxes = build_boxes(model, density, self.fonts, width)
         self.placed = paginate(self.boxes, self.page_h - 2 * self.margin_v, keep)
         self.pages = max((p for p, _, _ in self.placed), default=0) + 1
+        if self.fonts.unsupported:
+            raise FontError("the built-in PDF writer can't lay out right-to-left or joined scripts (Arabic, Hebrew, "
+                            "Indic and similar): " + " ".join(sorted(self.fonts.unsupported)[:20]))
         if self.fonts.missing:
             raise FontError("the built-in PDF writer's font has no glyph for: " + " ".join(sorted(self.fonts.missing)))
 
@@ -593,8 +629,7 @@ def write(layout, path, title, author, lang):
         objects[num] = page
     objects[pages_ref] = {"Type": Name("Pages"), "Kids": [Ref(n) for n in page_nums], "Count": layout.pages}
     stamp = time.strftime("D:%Y%m%d%H%M%S")
-    objects[info] = {"Title": title, "Author": author, "Creator": "Interviewly",
-                     "Producer": "Interviewly built-in PDF writer", "CreationDate": stamp, "ModDate": stamp}
+    objects[info] = {"Title": title, "Author": author, "CreationDate": stamp, "ModDate": stamp}   # no tool name
     objects[catalog] = {"Type": Name("Catalog"), "Pages": Ref(pages_ref), "Lang": lang,
                         "MarkInfo": {"Marked": True}, "StructTreeRoot": Ref(struct_root),
                         "ViewerPreferences": {"DisplayDocTitle": True}}

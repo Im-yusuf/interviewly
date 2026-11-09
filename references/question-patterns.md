@@ -143,12 +143,15 @@ OAuth, JWT, sessions, API keys, hashing, OWASP…
 - Secrets management.
 
 ## ai-assisted
-How the candidate worked with AI coding assistants. Ask it about projects whose dossier's **How it was built** shows a large AI share; it's fair to ask anyone. A good answer is specific and honest: what they decided, what they checked, where the AI was wrong.
-- How did you use AI on this project? Which parts did you write yourself?
-- Tell me about a time the AI's code was wrong. How did you notice, and what did you do?
-- How do you check code an assistant wrote before you ship it?
-- Pick one AI-written part. Walk me through what it does, line by line.
-- Would you build it the same way without the assistant? What would you do differently?
+How the candidate works with AI coding assistants. A good answer is specific and honest: what they decided, what they checked, where the AI was wrong.
+- **For everyone** (interviewers now ask almost every candidate, whatever their history shows):
+  - How do you use AI coding tools day to day?
+  - How do you check code an assistant wrote before you ship it?
+  - Tell me about a time the AI's code was wrong. How did you notice, and what did you do?
+- **When the dossier's How it was built shows a large AI share:**
+  - How did you use AI on this project? Which parts did you write yourself?
+  - Pick one AI-written part. Walk me through what it does, line by line.
+  - Would you build it the same way without the assistant? What would you do differently?
 
 ## generic
 Any technology without a better category.
@@ -175,3 +178,10 @@ Any technology without a better category.
 | feedback | "Tell me about critical feedback you got, and what you did with it." |
 | motivation | "Why this company?" · "Why are you leaving your current role?" · "Where do you want to be in 3 years?" |
 | ai-usage | "How do you use AI coding tools?" · "How much of this project did you write yourself?" · "Tell me about a time an AI suggestion was wrong." |
+
+### Screen questions (not STAR stories; leave them out of the story bank)
+
+| Category | Typical questions |
+|---|---|
+| pitch | "Tell me about yourself." · "Walk me through your background." Practise it with `/interviewly:walkthrough pitch`; topic `profile/tell-me-about-yourself`. |
+| logistics | "What are your salary expectations?" · "What's your notice period? When could you start?" · "Do you have the right to work in <country>, or will you need sponsorship?" · "Are you happy with <the role's location or onsite days>?" · "Are you interviewing elsewhere? What's your timeline?" |

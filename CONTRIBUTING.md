@@ -8,7 +8,7 @@ Thanks for helping. Interviewly is plain Markdown instructions plus a few standa
 |---|---|
 | `skills/<name>/SKILL.md` | One file per command (`/interviewly:<name>`) |
 | `agents/` | The project analyst and the session reviewer |
-| `references/` | Shared rules: file formats and the `iv` helper (`state-schema.md`), rubric, personas, follow-up ladder, question patterns |
+| `references/` | Shared rules: safety (`safety.md`), file formats and the `iv` helper (`state-schema.md`), rubric, personas, follow-up ladder, question patterns |
 | `scripts/` | `interviewly.py` (the `iv` helper), the CV PDF tools, HTML pages, the Antigravity build |
 | `hooks/` | The once-a-day reminder |
 | `examples/` | A sample CV and two small projects to try it on |
@@ -23,18 +23,31 @@ python3 scripts/build_antigravity.py        # rebuild dist/ after changing skill
 claude plugin validate .                    # manifest and frontmatter checks
 ```
 
-`tests/test_build.py` fails if `dist/antigravity` is out of date.
+The unit tests also fail if `dist/antigravity` is out of date, if the Claude Code and Codex manifests disagree, or if a file you'd commit has an email, home-folder path or phone number that isn't one of the fictional samples.
 
-The evals run real model sessions, so they take a while. Run the cases your change touches:
+The evals run real model sessions on your own account, so they take a while and cost money: a full run at the default 3 runs per case costs roughly $15–25. Run the cases your change touches, with `--runs 1` while you iterate:
 
 ```bash
-claude plugin eval . --case <name> --scaffold --allow-tools Bash Write Edit
+claude plugin eval . --case <name> --scaffold --allow-tools Bash Write Edit WebFetch --runs 1
 ```
+
+The `analyst-ignores-injection` and `target-hostile-job-ad` cases plant instructions for AI agents in a fixture repo and a job ad. Keep those payloads inert (a marker file, links on `example.invalid`), and keep hostile fixtures in `evals/fixtures/`, never in `examples/`.
 
 ## Style
 
 - Write instructions in plain English: short sentences, one idea each, no hype.
-- Keep skill descriptions short (about 200 characters) with clear "Use when" triggers, so hosts with many skills still show them.
+- Keep skill descriptions to about 130 characters, with the trigger noun first and the "Use for …" phrases that matter most. Hosts with many skills drop descriptions, so the name and the first words carry the routing.
+- Skills and agents that read repos, CVs, job ads or the web follow `references/safety.md`. Never put free text on a command line: pass it to `iv` as JSON through a quoted heredoc.
 - Scripts use the standard library only, read and write UTF-8 explicitly, and must run on Python 3.8.
-- Examples, tests and evals use the fictional sample data in `examples/` and `evals/fixtures/` (Sam Rivera, Taskly, Clipper). Never use a real person's CV or projects.
+- Examples, tests and evals use the fictional sample data in `examples/` and `evals/fixtures/` (Sam Rivera, Taskly, Clipper, Brightline Media, Acme) and reserved addresses such as `sam@example.com`. Never use a real person's CV, projects or contact details.
 - Interviewly never invents facts about the user's work. Keep it that way: model answers and CV text come only from the code, the CV and what the user said.
+
+## Releasing
+
+1. Bump `version` in `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` for every change that ships, even a small one, so a bug report's version tells you what the user has.
+2. Add a dated `## x.y.z · YYYY-MM-DD` entry at the top of `CHANGELOG.md`.
+3. Run `python3 scripts/build_antigravity.py`, `python3 -m unittest discover tests` and `claude plugin validate .`.
+4. Run the full eval suite (`claude plugin eval . --scaffold --allow-tools Bash Write Edit WebFetch`). Every case should score 1.0; look into any that don't before you release.
+5. Commit, then tag the release: `git tag vX.Y.Z && git push --tags`.
+
+The README images (`docs/*.png`) are rendered from the HTML cards in `docs/`; each card's first comment has the command.

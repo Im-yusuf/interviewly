@@ -4,15 +4,16 @@ name: Taskly API
 path: __WORKSPACE__/code/fastapi-todo
 analysed: 2026-11-01
 code: yes
-git: no
-main_author: unknown
+git: yes
+main_author: yes
+ai_share: 41%
 stack: [Python 3.12, FastAPI, Uvicorn, SQLAlchemy 2.0, Pydantic v2, SQLite, pytest, httpx, Docker]
 ---
 
 # Taskly API
 
 ## Summary
-Taskly is a small FastAPI CRUD service for todos. Each todo belongs to the API key that created it, and creating one with a due date and an email queues a stubbed "email reminder" through FastAPI `BackgroundTasks`. The project is tiny: 12 Python files (3 of them empty `__init__.py`), 227 lines of Python, 5 routes, 2 tests, a 6-line Dockerfile, no CI and no compose file. There is no `.git` directory, so commit count, active months and authorship can't be established. The code reads as one person's learning or portfolio project. The candidate probably wrote all of it, but that can't be verified. Several CV claims (PostgreSQL, async database access, background workers, 90% coverage) go well beyond what the code shows.
+Taskly is a small FastAPI CRUD service for todos. Each todo belongs to the API key that created it, and creating one with a due date and an email queues a stubbed "email reminder" through FastAPI `BackgroundTasks`. The project is tiny: 12 Python files (3 of them empty `__init__.py`), 227 lines of Python, 5 routes, 2 tests, a 6-line Dockerfile, no CI and no compose file. The git history has 3 commits over two weeks in September 2026, all by the candidate. The commit that added the routes, the API-key auth and the reminders credits Claude as co-author, so the candidate may know those parts least well. Several CV claims (PostgreSQL, async database access, background workers, 90% coverage) go well beyond what the code shows.
 
 ## Stack
 | Technology | Used for | Evidence |
@@ -202,4 +203,19 @@ The only entry point is `app.main:app`. It's started by `uvicorn` (`Dockerfile:6
 - **Reminder:** the simulated SMTP delay is 2 s (`app/services/notifications.py:12`).
 - **Container:** `python:3.12-slim`, port 8000, 1 Uvicorn worker (`Dockerfile:1,5,6`).
 - **Default database:** `sqlite:///./taskly.db` (`app/config.py:3`).
-- **Git:** no repository, so commit count, contributors and active dates are unknown.
+- **Git:** 3 commits from 2026-09-01 to 2026-09-14, one author (the candidate), one commit crediting an AI assistant.
+
+## How it was built
+- 3 commits from 2026-09-01 to 2026-09-14, all by the candidate (identity confirmed: Sam Rivera). No other contributors, no bots, no very large commits, and no AI tool files such as `CLAUDE.md` or `.cursorrules`.
+- About 59% of the added lines were written by hand: the data model, schemas, config and app setup (first commit) and the tests (last commit).
+- About 41% came in one commit that credits Claude (`Co-Authored-By: Claude`): the routes in `app/routers/todos.py`, the dependencies and API-key check in `app/deps.py`, and the reminder service in `app/services/notifications.py`.
+- Signals, not proof. Building with AI is normal; what matters is whether the candidate can explain the AI-credited parts.
+
+## Explain-risk
+| Component | Files | Risk | Why |
+|---|---|---|---|
+| Email reminders with `BackgroundTasks` | `app/routers/todos.py:38-39`, `app/services/notifications.py:10-13` | high | AI-credited; runs after the response, holds a threadpool slot for 2 s and is lost on restart; asked in almost every deep-dive |
+| `async def` routes on a sync session | `app/routers/todos.py:13-64`, `app/deps.py:10-15` | high | AI-credited; the event-loop blocking is non-obvious and contradicts the CV's async claim |
+| API-key auth and per-key isolation | `app/deps.py:18-21`, `app/routers/todos.py:21,43-47` | medium | AI-credited but short; security questions are likely |
+| Data model and schemas | `app/models.py:9-18`, `app/schemas.py:6-25` | low | written by hand |
+| Tests | `tests/test_todos.py` | low | written by hand |

@@ -18,7 +18,7 @@ Start a thread at **what** or **how**, depending on level and persona. After eac
 - **Partly right** → stay on the rung and narrow it: "Okay, and specifically where does that happen?"
 - **Weak or wrong** → one probing follow-up on the same rung ("Are you sure? What would happen if…?"), then move on. Don't pile on.
 
-Stop a thread after at most 3 follow-ups (the bar-raiser may use all 3; the recruiter usually uses 0 or 1).
+Stop a thread after at most 3 follow-ups (the bar-raiser may use all 3; the recruiter usually uses 0 or 1). System design is the exception: one thread of about 6–8 interviewer turns, through the stages in `personas.md`.
 
 ## Triggers: always follow up when you hear…
 
@@ -44,5 +44,5 @@ When the user types `hint`, give the smallest nudge that could unblock them, and
 
 A session's first question should be a warm-up at the **what** rung:
 - "Walk me through <project> in a couple of minutes."
-- "Tell me about yourself, and focus on the work that's most relevant to this role." (Use the active target if there is one.)
+- "Tell me about yourself, and focus on the work that's most relevant to this role." (Use the active target if there is one. Its topic id is `profile/tell-me-about-yourself`; `/interviewly:walkthrough pitch` practises it on its own.)
 - System design: the design prompt itself.

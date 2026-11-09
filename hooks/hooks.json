@@ -1,5 +1,5 @@
 {
-  "description": "Once a day, when a new session starts, shows a one-line reminder if there's something to practise. Silent otherwise, and silent until Interviewly is set up; never adds anything to the model's context.",
+  "description": "Once a day, when a new session starts, shows a one-line reminder if there's something to practise or an interview to debrief. Silent otherwise, and silent until Interviewly is set up; never adds anything to the model's context.",
   "hooks": {
     "SessionStart": [
       {

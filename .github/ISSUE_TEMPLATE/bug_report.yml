@@ -1,0 +1,50 @@
+name: Bug report
+description: Something didn't work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are public. Please don't paste your CV, a job ad, a company you're interviewing with, your interview answers, private code, files from `~/.interviewly`, or paths that show your username.
+        Most problems can be reproduced with the sample CV and projects, in a throwaway folder: see "See it catch a bluff" in the README.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I've removed my CV, job ads, company names, interview answers, private code and anything from `~/.interviewly`, or used the sample data instead.
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The command you ran (such as `/interviewly:drill`), ideally on the sample data. Describe what you typed rather than pasting real answers.
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: App and version
+      placeholder: Claude Code 2.x / Codex / Antigravity
+    validations:
+      required: true
+  - type: input
+    id: interviewly-version
+    attributes:
+      label: Interviewly version
+      description: In Claude Code, `/plugin` lists it; in Codex, `codex plugin list`; in Antigravity, the `version` in `~/.gemini/config/plugins/interviewly/plugin.json`.
+  - type: input
+    id: os
+    attributes:
+      label: OS and Python version
+      placeholder: macOS 15, Python 3.12 (`python3 --version`)

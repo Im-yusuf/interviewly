@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Convert a CV to Markdown-style text on stdout, using only the standard library.
 
-Supports .pdf, .docx, .odt, .rtf, .txt and .md. For PDF and Word files it keeps what
+Supports .pdf, .docx, .odt, .rtf, .txt and .md (UTF-8, UTF-16 or a Windows code page), going
+by what the file holds when its name says otherwise. For PDF and Word files it keeps what
 plain-text extraction loses: links come out as [text](url) and bold as **text**, and
-every link in the file is listed at the end, so a rewritten CV can keep them all.
+every link in the file is listed at the end, so a rewritten CV can keep them all. Text from
+Word and OpenDocument page headers and footers comes first, under a line in brackets.
+
+A PDF's two columns that flow apart (a sidebar) are read one after the other. Anything the
+reader wants checked comes first, on lines of their own that start with "(Note:".
 
 Usage: python3 cv_to_text.py <path>
 """
@@ -20,9 +25,14 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 MC = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
 R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 TEXT = "{urn:oasis:names:tc:opendocument:xmlns:text:1.0}"
+STYLE = "{urn:oasis:names:tc:opendocument:xmlns:style:1.0}"
 XLINK = "{http://www.w3.org/1999/xlink}"
-CONTAINERS = ("smartTag", "ins", "sdt", "sdtContent", "customXml", "fldSimple")
+CONTAINERS = ("smartTag", "ins", "moveTo", "sdt", "sdtContent", "customXml", "fldSimple", "dir", "bdo")
 OFF = ("0", "false", "off", "none")
+MAX_FILE = 50 << 20   # bytes: far more than any CV, even one with photos
+MAX_PART = 20 << 20   # bytes one XML part of a Word or OpenDocument file may unpack to
+DOCTYPE = re.compile(rb"<\x00?!\x00?D")   # "<!DOCTYPE" (also in UTF-16): Office files never have one, entity tricks do
+PAGE_NUMBER = re.compile(r"[\W_]*(page\s*)?\d{1,3}(\s*(of|/)\s*\d{1,3})?[\W_]*", re.I)   # not "+447700900123"
 
 
 class CvReadError(Exception):
@@ -30,15 +40,48 @@ class CvReadError(Exception):
 
 
 def read_zip(path, members, kind):
-    """{member: parsed XML root} for the members a zip-based document has (None for a missing optional one)."""
+    """{member: parsed XML root} for the members a zip-based document has (None for a missing optional one).
+    members: [(name, optional)], or a function that turns the zip's member names into that list."""
     try:
         with zipfile.ZipFile(path) as z:
             names = set(z.namelist())
-            return {m: ET.fromstring(z.read(m)) if m in names or not optional else None
-                    for m, optional in members}
-    except (zipfile.BadZipFile, KeyError, ET.ParseError, OSError, EOFError) as e:
+            out = {}
+            for m, optional in (members(names) if callable(members) else members):
+                if m not in names and optional:
+                    out[m] = None
+                    continue
+                with z.open(m) as f:   # read with a cap: the sizes a zip claims can be false
+                    data = f.read(MAX_PART + 1)
+                if len(data) > MAX_PART:
+                    raise CvReadError(f"{Path(path).name} is too large to read safely: {m} unpacks to more than "
+                                      f"{MAX_PART >> 20} MB. Open it and save it again, or export it as PDF.")
+                if DOCTYPE.search(data):
+                    raise CvReadError(f"{Path(path).name} isn't a normal {kind} file ({m} declares a document type, "
+                                      f"which Office files never do). Open it and save it again, or export it as PDF.")
+                out[m] = ET.fromstring(data)
+            return out
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, KeyError, ET.ParseError, OSError, EOFError, ValueError,
+            NotImplementedError, RuntimeError) as e:
         raise CvReadError(f"{Path(path).name} isn't a readable {kind} file ({e}). Open it and save it again, "
                           f"or export it as PDF.")
+
+
+def visible(line):
+    """A line's text without its heading, list and bold marks, to tell whether two lines say the same."""
+    return " ".join(re.sub(r"^#+\s*|^[-\u2022]\s+|\*\*", "", line).split()).casefold()
+
+
+def page_edges(body, header, footer):
+    """The body's lines with the page header and footer text (often the contact details) first, once each."""
+    seen, edge = {visible(l) for l in body}, []
+    for line in header + footer:
+        if visible(line) not in seen and not PAGE_NUMBER.fullmatch(line):
+            seen.add(visible(line))
+            edge.append(line)
+    if not edge:
+        return body
+    where = " and ".join(w for w, part in (("header", header), ("footer", footer)) if set(part) & set(edge))
+    return [f"(From the page {where}, which many ATS skip:)"] + edge + [""] + body
 
 
 def styled(runs):
@@ -65,9 +108,36 @@ def styled(runs):
     return "".join(out)
 
 
+DOCX_EDGE = re.compile(r"word/(header|footer)(\d*)\.xml")
+
+
 def docx_to_text(path):
-    parts = read_zip(path, (("word/document.xml", False), ("word/_rels/document.xml.rels", True)), "Word (.docx)")
-    root, rels_xml = parts["word/document.xml"], parts["word/_rels/document.xml.rels"]
+    def members(names):   # the body, then each header and footer, each with the file that holds its links
+        edges = sorted((n for n in names if DOCX_EDGE.fullmatch(n)),
+                       key=lambda n: (n.startswith("word/footer"), int(DOCX_EDGE.fullmatch(n).group(2) or 0)))
+        return [(m, optional) for n in ["word/document.xml"] + edges
+                for m, optional in ((n, n != "word/document.xml"), (word_rels(n), True))]
+
+    parts = read_zip(path, members, "Word (.docx)")
+    lines, links = docx_part(parts["word/document.xml"], parts[word_rels("word/document.xml")])
+    edges, edge_links = {"header": [], "footer": []}, []
+    for name in parts:
+        m = DOCX_EDGE.fullmatch(name)
+        if m and parts[name] is not None:
+            part_lines, part_links = docx_part(parts[name], parts[word_rels(name)])
+            edges[m.group(1)] += part_lines
+            edge_links += part_links
+    lines = page_edges(lines, edges["header"], edges["footer"])
+    return "\n".join(lines) + links_list(edge_links + links)
+
+
+def word_rels(part):
+    """word/header1.xml -> word/_rels/header1.xml.rels, the file with that part's link addresses."""
+    return "word/_rels/" + part[len("word/"):] + ".rels"
+
+
+def docx_part(root, rels_xml):
+    """([line], [(text, url)]) of one part of a Word file: the body, a header or a footer."""
     rels = {r.get("Id"): r.get("Target") for r in rels_xml} if rels_xml is not None else {}
     # A text box is saved twice: the drawing (mc:Choice) and a VML copy for old Word (mc:Fallback). Read it once.
     for parent, child in [(p, c) for p in root.iter() for c in p if c.tag == MC + "Fallback"]:
@@ -92,6 +162,13 @@ def docx_to_text(path):
                         parts.append("\t")
                     elif t in ("br", "cr"):
                         parts.append(" ")
+                    elif t == "noBreakHyphen":   # "+44 7700-900123", "e-commerce"
+                        parts.append("-")
+                    elif t == "sym":   # an inserted symbol; Symbol and Wingdings ones (bullets, icons) use private codes
+                        code = n.get(W + "char", "")
+                        if re.fullmatch(r"[0-9A-Fa-f]{2,5}", code) and int(code, 16) >= 0x20 \
+                                and not 0xE000 <= int(code, 16) <= 0xF8FF:
+                            parts.append(chr(int(code, 16)))
                     elif t == "instrText" and n.text:
                         m = re.search(r'HYPERLINK\s+"([^"]+)"', n.text)
                         if m:
@@ -124,7 +201,7 @@ def docx_to_text(path):
             level = style_name.replace("Heading", "") or "2"
             text = "#" * min(int(level) if level.isdigit() else 2, 6) + " " + text
         lines.append(text)
-    return "\n".join(lines) + links_list(links)
+    return lines, links
 
 
 def links_list(links):
@@ -137,17 +214,45 @@ def links_list(links):
 
 
 def pdf_to_text(path):
+    """The PDF's text in reading order, after a "(Note: ...)" line for each thing worth checking by eye."""
     import pdf_text
+    name = Path(path).name
     with open(path, "rb") as f:
         if b"%PDF" not in f.read(1024):
-            sys.exit(f"{Path(path).name} isn't a PDF (it doesn't start with %PDF). Check the file, or export the CV again.")
-    doc = pdf_text.Document(path)
-    if doc.encrypted:
-        sys.exit(pdf_text.ENCRYPTED[0].upper() + pdf_text.ENCRYPTED[1:] + ".")
-    if len(re.findall(r"\w+", doc.text())) < 30:
-        sys.exit("This PDF has almost no text layer (it's probably a scan or an image). Read it with the Read tool, "
-                 "and note that an ATS can't read it either.")
-    return doc.markdown()
+            sys.exit(f"{name} isn't a PDF (it doesn't start with %PDF). Check the file, or export the CV again.")
+    try:
+        doc = pdf_text.Document(path)
+        if doc.encrypted:
+            sys.exit(pdf_text.ENCRYPTED[0].upper() + pdf_text.ENCRYPTED[1:] + ".")
+        bad, drawn = doc.undecoded()
+        cut = b"%%EOF" not in doc.pdf.data[-4096:]
+        if len(re.findall(r"\w+", doc.text())) < 30:
+            if cut or not doc.pages:
+                why = "it doesn't end the way a PDF should" if cut else "no pages could be found in it"
+                sys.exit(f"{name} looks damaged or incomplete ({why}). Export it again from the program that made it.")
+            if drawn >= 100 and bad >= drawn / 2:
+                sys.exit("This PDF's text can't be decoded: its fonts have no Unicode map, so an ATS can't read it "
+                         "either. Read it with the Read tool, and export the CV again with a different font.")
+            sys.exit("This PDF has almost no text layer (it's probably a scan or an image). Read it with the Read tool, "
+                     "and note that an ATS can't read it either.")
+        text, notes = doc.markdown(), []
+        if cut:
+            notes.append("this PDF looks incomplete (it doesn't end the way a PDF should), so some text may be missing.")
+        if doc.columned:
+            notes.append("this PDF has two columns side by side. The left one is read first, then the right one; "
+                         "check the order with the Read tool if anything looks out of place.")
+        elif doc.side_by_side():
+            notes.append("this PDF has text side by side (columns or a table), read here line by line across the "
+                         "page. If lines look mixed up, check the order with the Read tool.")
+        if bad > max(5, drawn * 0.02):
+            notes.append("some characters in this PDF can't be decoded (fonts without a Unicode map), so letters may "
+                         "be missing or wrong. Check names and accented words with the Read tool.")
+    except pdf_text.TooComplex as e:
+        raise CvReadError(f"{name} is too complex to read safely: {e}. Export it again, or read it with the Read tool.")
+    except Exception as e:   # a malformed file: one line, not a traceback
+        raise CvReadError(f"{name} isn't a readable PDF ({type(e).__name__}: {e}). Export it again, "
+                          "or read it with the Read tool.")
+    return "".join(f"(Note: {n})\n" for n in notes) + ("\n" if notes else "") + text
 
 
 ODT_PARAGRAPHS = (TEXT + "p", TEXT + "h")
@@ -173,8 +278,24 @@ def odt_text(node):
     return "".join(out)
 
 
+ODT_EDGES = {STYLE + kind + variant: kind for kind in ("header", "footer") for variant in ("", "-left", "-first")}
+
+
 def odt_to_text(path):
-    root = read_zip(path, (("content.xml", False),), "OpenDocument (.odt)")["content.xml"]
+    parts = read_zip(path, (("content.xml", False), ("styles.xml", True)), "OpenDocument (.odt)")
+    lines, links = odt_part(parts["content.xml"])
+    edges, edge_links = {"header": [], "footer": []}, []
+    for node in (parts["styles.xml"].iter() if parts["styles.xml"] is not None else ()):   # the master pages
+        if node.tag in ODT_EDGES:
+            part_lines, part_links = odt_part(node)
+            edges[ODT_EDGES[node.tag]] += part_lines
+            edge_links += part_links
+    lines = page_edges(lines, edges["header"], edges["footer"])
+    return "\n".join(lines) + links_list(edge_links + links)
+
+
+def odt_part(root):
+    """([line], [(text, url)]) of the paragraphs inside an OpenDocument element."""
     lines, links = [], []
 
     def visit(node, in_list):
@@ -190,7 +311,7 @@ def odt_to_text(path):
                 visit(child, in_list or child.tag == TEXT + "list-item")
 
     visit(root, False)
-    return "\n".join(lines) + links_list(links)
+    return lines, links
 
 
 # ---------- RTF ----------
@@ -333,7 +454,9 @@ def rtf_to_text(path):
             skip -= 1   # a control word in a \uN fallback counts as one character
             continue
         if word == "u" and value is not None:
-            emit(chr(value + 65536 if value < 0 else value))
+            code = value + 65536 if value < 0 else value
+            if 0 <= code < 0x110000:
+                emit(chr(code))
             skip = state["uc"]
         elif word == "uc":
             state["uc"] = max(0, value or 0)
@@ -376,12 +499,45 @@ def rtf_to_text(path):
 
 
 def read_any_text(path):
-    """A .txt or .md CV: UTF-8 (with or without a byte-order mark), else the Windows code page it was saved in."""
+    """A .txt or .md CV: UTF-8 (with or without a byte-order mark), UTF-16 with one (Notepad's "Unicode"),
+    else the Windows code page it was saved in."""
     raw = Path(path).read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16", "replace")
+    if b"\x00" in raw:
+        raise CvReadError(f"{Path(path).name} isn't text or a CV format this can read. If it's a picture of the CV, "
+                          "read it with the Read tool; otherwise export it as PDF or .docx.")
     try:
         return raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         return raw.decode("cp1252", "replace")
+
+
+def sniff(path):
+    """The format a file's first bytes show (".pdf", ".docx", ".odt", ".rtf", ".doc" or ".pages"), or None:
+    files saved from an email or a download often lose their extension or get the wrong one."""
+    with open(path, "rb") as f:
+        head = f.read(8)
+    if head.lstrip(b"\x00\t\n\x0c\r \xef\xbb\xbf").startswith(b"%PDF"):
+        return ".pdf"
+    if head.startswith(b"{\\rtf"):
+        return ".rtf"
+    if head.startswith(b"\xd0\xcf\x11\xe0"):   # an old binary Office file, or a password-protected new one
+        return ".doc"
+    if head.startswith(b"PK\x03\x04"):
+        try:
+            with zipfile.ZipFile(path) as z:
+                names = set(z.namelist())
+                mime = z.open("mimetype").read(100) if "mimetype" in names else b""
+        except (zipfile.BadZipFile, OSError, EOFError, ValueError, NotImplementedError, RuntimeError):
+            return None
+        if "word/document.xml" in names:
+            return ".docx"
+        if mime.startswith(b"application/vnd.oasis.opendocument.text"):
+            return ".odt"
+        if "index.xml" in names or any(n.startswith("Index/") for n in names):
+            return ".pages"
+    return None
 
 
 def main():
@@ -391,19 +547,37 @@ def main():
     if len(sys.argv) != 2:
         sys.exit("usage: cv_to_text.py <path>")
     path = Path(sys.argv[1]).expanduser()
+    suffix = path.suffix.lower()
+    pages = (f"{path.name} is an Apple Pages file, which this can't read. In Pages, choose File > Export To > PDF "
+             "(or Word), then use that file.")
+    if suffix == ".pages" and path.is_dir():   # older Pages files are folders
+        sys.exit(pages)
     if not path.is_file():
         sys.exit(f"not found: {path}")
-    suffix = path.suffix.lower()
+    if path.stat().st_size > MAX_FILE:
+        sys.exit(f"{path.name} is {path.stat().st_size >> 20} MB, too big to read as a CV (the limit is "
+                 f"{MAX_FILE >> 20} MB). Export it again with smaller images.")
     converters = {".pdf": pdf_to_text, ".docx": docx_to_text, ".odt": odt_to_text, ".rtf": rtf_to_text}
     try:
-        if suffix in converters:
-            print(converters[suffix](path))
-        elif suffix in (".txt", ".md", ".markdown", ""):
+        kind = sniff(path) or suffix
+        if ".pages" in (kind, suffix):
+            sys.exit(pages)
+        if kind == ".doc":
+            sys.exit(f"{path.name} is an old Word (.doc) file or a password-protected one. Open it in Word and "
+                     "save it as an unprotected .docx or PDF.")
+        if kind in converters:
+            print(converters[kind](path))
+        elif kind in (".txt", ".md", ".markdown", ""):
             print(read_any_text(path))
         else:
             sys.exit(f"unsupported file type: {suffix} (try exporting the CV as PDF or .docx)")
     except CvReadError as e:
         sys.exit(str(e))
+    except OSError as e:
+        sys.exit(f"can't read {path.name}: {e.strerror or e}")
+    except (RecursionError, MemoryError) as e:   # nesting or sizes no real CV has
+        sys.exit(f"{path.name} is too complex to read safely ({type(e).__name__}). Export it as PDF, "
+                 "or read it with the Read tool.")
 
 
 if __name__ == "__main__":

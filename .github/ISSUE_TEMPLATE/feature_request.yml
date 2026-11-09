@@ -1,0 +1,18 @@
+name: Feature request
+description: An idea to make interview prep better
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Issues are public. Describe the kind of role or interview in general terms; please leave out company names, your CV and anything personal.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What were you trying to prepare for, and what got in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like Interviewly to do

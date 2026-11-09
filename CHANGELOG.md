@@ -2,6 +2,21 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.9.0 · 2026-11-09
+
+A full audit (security, privacy, scripts, the CV pipeline, the skills, job-search effectiveness and release readiness), with every fix independently reviewed.
+
+- **Practice fits your interview date.** Before an interview, reviews come back in time and new topics arrive faster, so every topic the job needs gets seen. Intervals are capped at 30 days. Several scores of one topic on one day count once, and a retried command changes nothing.
+- **An honest readiness score.** Readiness now counts the topics you haven't practised yet and shows coverage ("34/100 · 8 of 30 topics practised"). Below 25% coverage it says there isn't enough practice yet, instead of showing 100/100 after one answer.
+- **Bluffs can't score well.** An answer flagged as a bluff, or one that the code contradicts, scores 2 at most. Levels now run from intern to staff, each with its own rubric anchors.
+- **New practice.** `/interviewly:walkthrough pitch` for "tell me about yourself". Recruiter-screen logistics (salary, notice period, right to work). The "how do you use AI?" question for everyone. Fuller system-design rounds. `/interviewly:debrief outcome` after a real interview, plus a one-line reminder to debrief.
+- **No CV yet?** Setup builds a short one from your answers, and `/interviewly:cv new` turns it and your code into a full CV. CV rewrites now ask for the real results behind duty bullets.
+- **Returning users.** Pasting a new job ad no longer re-runs onboarding. Background setup starts the project analysts from the main conversation, and checks the result when they report back.
+- **Better CV reading and writing.** Two-column PDFs, Word headers and footers, LaTeX ligatures and accents are read correctly. Names keep their real case in the PDF, right-to-left text is never silently garbled, and PDFs no longer name the tool. The ATS check matches whole words with aliases (Go/Golang), drops checks that could only be cleared by changing true facts, and flags date of birth, marital status and duty-only bullets.
+- **Who wrote what is more accurate.** Identities match exactly, lockfiles and generated files are left out, AI agents and human co-authors are told apart, monorepo subfolders are handled, and blobless clones are never fetched one blob at a time.
+- **Security and privacy.** Free text never goes on a command line (`iv score --stdin`, `iv seed --file`, quoted heredocs), so code in a question or answer can't run. Shared safety rules (`references/safety.md`) cover hostile repos and job ads, secrets, and what may leave your machine. `~/.interviewly` is kept private (0700). State writes are locked and atomic, so parallel sessions don't lose scores. Git runs hardened against a hostile repo's config. The Antigravity agents no longer run commands automatically. The share image shows a project's name only when its repo is public, and never your answers or fixes. Clone URLs are checked, and tokens are stripped.
+- **Release.** CI on Linux and macOS (Windows experimental) with read-only permissions, manifest and personal-data checks, and eval scaffold checks. New evals for prompt injection, CV inflation, pause and resume, and skill triggering. Issue forms that warn against posting a CV or personal data. Docs updated to match.
+
 ## 0.8.0 · 2026-11-02
 
 - **Who wrote what.** Setup reads each project's git history (authors, AI `Co-Authored-By` trailers, AI tool files such as `CLAUDE.md` or `.cursorrules`) and marks the parts you're least likely to be able to explain yet. You confirm which git identities are yours; the result is a signal, not a verdict.

@@ -6,6 +6,7 @@ analysed: 2026-11-01
 code: yes
 git: no
 main_author: unknown
+ai_share: unknown
 stack: [Python 3.9+, FFmpeg, ffprobe, libx264, AAC, argparse, subprocess, concurrent.futures, logging]
 ---
 
@@ -191,3 +192,14 @@ Both bullets are only partly supported: 3 of the 5 sub-claims have no evidence i
 - Maximum output per video at the defaults: 5 × 15 s = 75 s.
 - Subprocess timeouts: none. Retries: none.
 - Calculated: 500 videos/day = one every ~173 s (86,400 / 500). With 4 workers that allows ~11.5 min per video, so the CV figure is plausible for short clips on one machine, but the code can't prove it.
+
+## How it was built
+No git history (the folder isn't a git repository), so who wrote what can't be told. Explain-risk below comes from the code alone: how tricky each part is and how likely it is to come up.
+
+## Explain-risk
+| Component | Files | Risk | Why |
+|---|---|---|---|
+| Scene detection through ffmpeg filters | `clipper.py:24-32` | high | `select`/`showinfo` and the stderr regex are non-obvious, and the hardware-encoding claim leads straight here |
+| Seeking and stream copy | `clipper.py:48-55` | high | keyframe-aligned cuts are a classic follow-up, and `--reencode` changes the behaviour |
+| Highlight selection | `clipper.py:35-45` | medium | a short greedy algorithm with edge cases at the end of a video |
+| Worker pool and error handling | `clipper.py:80-88` | medium | which exceptions escape, and why threads are enough |

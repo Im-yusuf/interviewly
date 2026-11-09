@@ -4,9 +4,12 @@ Self-contained pages (inline CSS and SVG, no network), in the same look as docs/
 """
 import html
 import math
+import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 REPO_URL = "github.com/Im-yusuf/interviewly"
@@ -66,8 +69,13 @@ blockquote { border-left: 3px solid var(--line); padding: 2px 0 2px 14px; color:
 .dims div span { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 4px; }
 .kv { font-size: 14.5px; color: var(--soft); }
 .kv b { color: var(--text); font-weight: 600; }
-.model { background: var(--code-bg); border-radius: 10px; padding: 12px 14px; font-size: 14.5px; }
-.model .eyebrow { margin-bottom: 4px; color: var(--green); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.said, .model { border-radius: 10px; padding: 12px 14px; font-size: 14.5px; display: flex; flex-direction: column; gap: 6px; }
+.said { border: 1px solid var(--line); }
+.said .ok { color: var(--green); } .said .no { color: var(--red); }
+.model { background: var(--code-bg); }
+.model .eyebrow { color: var(--green); }
+.was { color: var(--muted); font-weight: 600; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 td, th { text-align: left; padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; border-top: 0; }
@@ -81,7 +89,9 @@ svg text { fill: var(--muted); font-family: var(--ui); font-size: 11px; }
 
 
 def fmt(text):
-    """Escape text and turn `backticks` into <code>."""
+    """Escape text and turn `backticks` into <code>. Numbers, 0 included, show as they are."""
+    if isinstance(text, (int, float)) and not isinstance(text, bool):
+        text = str(text)
     return re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(str(text or "")))
 
 
@@ -99,21 +109,35 @@ def num(value):
     return None
 
 
+def score_of(value):
+    """A 1-4 rubric score as a number, or None (a typo'd 7 or a 0 is not a score)."""
+    n = num(value)
+    return n if n is not None and 1 <= n <= 4 else None
+
+
 def shown(value):
     """A score as the page shows it: 3, 2.5, or – when there's none."""
-    n = num(value)
+    n = score_of(value)
     return "–" if n is None else str(n)
 
 
 def band(score):
-    score = num(score)
+    score = score_of(score)
     if score is None:
         return "blue"
     return "green" if score >= 3.5 else "blue" if score >= 2.8 else "amber" if score >= 2.0 else "red"
 
 
-def label_for(score):
-    return {"green": "Interview-ready", "blue": "Nearly there", "amber": "Needs work", "red": "Not ready yet"}[band(score)]
+LABELS = {"green": "Interview-ready", "blue": "Nearly there", "amber": "Needs work", "red": "Not ready yet"}
+
+
+def label_for(score, questions=None):
+    """The rubric's label for a session score. Interview-ready needs at least 5 questions: with fewer, it's
+    "Strong session"."""
+    if score_of(score) is None:
+        return "Not scored"
+    label = LABELS[band(score)]
+    return "Strong session" if label == "Interview-ready" and questions is not None and questions < 5 else label
 
 
 def pct_band(value):
@@ -136,14 +160,27 @@ def plural(n, word):
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
+MODES = ("deep-dive", "fundamentals", "behavioral", "system-design", "claims", "mixed", "drill", "learn", "walkthrough")
+
+
 def mode_name(mode):
-    return (mode or "interview").replace("-", " ").capitalize()
+    return str(mode or "interview").replace("-", " ").capitalize()
+
+
+def focus_of(review):
+    """The session's project or skill as text (agents sometimes write a list or an object)."""
+    focus = review.get("focus_name") or review.get("focus") or ""
+    if isinstance(focus, dict):
+        focus = focus.get("name") or focus.get("project") or focus.get("skill") or ""
+    if isinstance(focus, list):
+        focus = ", ".join(str(f) for f in focus if isinstance(f, (str, int)))
+    return str(focus)
 
 
 def streak_chip(streak):
     if not isinstance(streak, dict) or not streak.get("current"):
         return ""
-    return f'<span class="chip">🔥 {streak["current"]}-day streak</span>'
+    return f'<span class="chip">🔥 {fmt(streak["current"])}-day streak</span>'
 
 
 # ---------- report card ----------
@@ -155,12 +192,20 @@ def as_list(value):
     return value if isinstance(value, list) else []
 
 
+def was(previous):
+    """The muted "2 → " before a retried topic's new score, when the review knows the previous one."""
+    previous = score_of(previous)
+    return f'<span class="was">{fmt(previous)} → </span>' if previous is not None else ""
+
+
 def report_card(review, streak=None):
     score = review.get("score")
     b = band(score)
     threads = [t for t in as_list(review.get("threads")) if isinstance(t, dict)]
-    title = f"{mode_name(review.get('mode'))} · {review.get('focus_name') or review.get('focus') or ''}".strip(" ·")
-    meta = " · ".join(x for x in (review.get("date"), review.get("persona") and f"{review['persona']} interviewer",
+    scheduled = [x for x in as_list(review.get("scheduled")) if isinstance(x, dict)]
+    previous = {str(x.get("topic")): x.get("previous_score") for x in scheduled}
+    title = f"{mode_name(review.get('mode'))} · {focus_of(review)}".strip(" ·")
+    meta = " · ".join(str(x) for x in (review.get("date"), review.get("persona") and f"{review['persona']} interviewer",
                                   review.get("difficulty") and f"{review['difficulty']} level") if x)
     parts = [f"""
 <section class="card">
@@ -168,8 +213,8 @@ def report_card(review, streak=None):
   <h1>{fmt(title)}</h1>
   <div class="meta">{fmt(meta)}</div>
   <div class="big" style="margin-top:18px"><span class="num">{fmt(shown(score))}</span><span class="out">/ 4</span>
-    <span class="pill band-{b}">{fmt(review.get('label') or label_for(score))}</span></div>
-  <div style="margin-top:14px">{bar(score, 4, b)}</div>
+    <span class="pill band-{b}">{fmt(review.get('label') or label_for(score, len(threads) or None))}</span></div>
+  <div style="margin-top:14px">{bar(score_of(score), 4, b)}</div>
   <div class="chips">{streak_chip(streak)}<span class="chip">{plural(len(threads), 'question')}</span></div>
 </section>"""]
     learn = [x for x in as_list(review.get("learn_first")) if isinstance(x, dict)]
@@ -193,25 +238,31 @@ def report_card(review, streak=None):
         scores = t.get("scores") if isinstance(t.get("scores"), dict) else {}
         dims = "".join(
             f'<div><span>{name}<b>{fmt(shown(scores.get(key)))}</b></span>'
-            f'{bar(scores.get(key), 4, band(scores.get(key)))}</div>'
+            f'{bar(score_of(scores.get(key)), 4, band(scores.get(key)))}</div>'
             for key, name in DIMS)
-        rows = "".join(f'<div class="kv"><b>{label}:</b> {fmt(t.get(key))}</div>'
-                       for key, label in (("landed", "Landed"), ("missing", "Missing")) if t.get(key))
-        model = (f'<div class="model"><div class="eyebrow">Model answer</div>{fmt(t["model_answer"])}</div>'
+        # What the user said (their words, what landed, what was missing) side by side with the model answer
+        said = "".join(f'<div class="kv"><b class="{css}">{label}:</b> {fmt(t.get(key))}</div>'
+                       for key, label, css in (("landed", "Landed", "ok"), ("missing", "Missing", "no"))
+                       if t.get(key))
+        if t.get("answer_excerpt"):
+            said = f'<blockquote>{fmt(t["answer_excerpt"])}</blockquote>{said}'
+        model = (f'<div class="eyebrow">Model answer</div><div>{fmt(t["model_answer"])}</div>'
                  if t.get("model_answer") else "")
         say = f'<div class="kv"><b>Next time, say:</b> {fmt(t["say_next_time"])}</div>' if t.get("say_next_time") else ""
+        sides = ((f'<div class="said"><div class="eyebrow">What you said</div>{said}</div>' if said else "")
+                 + (f'<div class="model">{model}{say}</div>' if model or say else ""))
         parts.append(f"""
 <section class="card thread">
-  <header><span class="eyebrow">Q{t.get('n', '')}</span><span class="t">{fmt(t.get('label') or t.get('topic'))}</span>
-    <span class="s band-{band(s)}">{fmt(shown(s))}/4</span></header>
+  <header><span class="eyebrow">Q{fmt(t.get('n'))}</span><span class="t">{fmt(t.get('label') or t.get('topic'))}</span>
+    <span class="s band-{band(s)}">{was(previous.get(str(t.get('topic'))))}{fmt(shown(s))}/4</span></header>
   {f'<blockquote>{fmt(t.get("question"))}</blockquote>' if t.get('question') else ''}
   <div class="dims">{dims}</div>
   {f'<div class="kv">{fmt(t.get("verdict"))}</div>' if t.get('verdict') else ''}
-  {rows}{model}{say}
+  {f'<div class="compare">{sides}</div>' if sides else ''}
 </section>""")
-    scheduled = [x for x in as_list(review.get("scheduled")) if isinstance(x, dict)]
     if scheduled:
-        rows = "".join(f'<tr><td><code>{fmt(x.get("topic"))}</code></td><td class="n">{fmt(shown(x.get("score")))}/4</td>'
+        rows = "".join(f'<tr><td><code>{fmt(x.get("topic"))}</code></td>'
+                       f'<td class="n">{was(x.get("previous_score"))}{fmt(shown(x.get("score")))}/4</td>'
                        f'<td class="n">due {fmt(x.get("next_due"))}</td></tr>' for x in scheduled)
         parts.append(f'<section class="card"><h2>Back for review</h2><table>{rows}</table></section>')
     parts.append("<footer>Scored by a separate reviewer agent · made with Interviewly</footer>")
@@ -221,7 +272,7 @@ def report_card(review, streak=None):
 # ---------- dashboard ----------
 
 def trend_svg(sessions):
-    points = [dict(s, score=num(s.get("score"))) for s in sessions if num(s.get("score")) is not None][-12:]
+    points = [dict(s, score=score_of(s.get("score"))) for s in sessions if score_of(s.get("score")) is not None][-12:]
     if len(points) < 2:
         return '<p class="meta">The trend appears after two scored sessions.</p>'
     w, h, left, right, top, bottom = 760, 200, 34, 16, 14, 30
@@ -232,7 +283,7 @@ def trend_svg(sessions):
     coords = [(left + i * step, y(p["score"])) for i, p in enumerate(points)]
     line = " ".join(f"{x:.1f},{yy:.1f}" for x, yy in coords)
     dots = "".join(f'<circle cx="{x:.1f}" cy="{yy:.1f}" r="4.5" fill="var(--{band(p["score"])})">'
-                   f'<title>{fmt(p.get("date"))} · {fmt(p.get("mode"))} · {p["score"]}/4</title></circle>'
+                   f'<title>{fmt(p.get("date"))} · {fmt(p.get("mode"))} · {fmt(p["score"])}/4</title></circle>'
                    for (x, yy), p in zip(coords, points))
     labels = "".join(f'<text x="{x:.1f}" y="{h - 8}" text-anchor="middle">{fmt(str(p.get("date") or "")[5:])}</text>'
                      for (x, _), p in zip(coords, points))
@@ -251,22 +302,41 @@ def readiness_table(rows, show_status):
         warn = " ⚠️" if show_status and r.get("status") == "cv-only" else ""
         cell = (bar(value, 100, pct_band(value)) if value is not None else '<span class="meta">untested</span>')
         out.append(f'<tr><td>{fmt(r["name"])}{warn}</td><td class="barcell">{cell}</td>'
-                   f'<td class="n">{value if value is not None else "–"}</td>'
-                   f'<td class="n">{r["tested"]}/{r["total"]}</td><td class="n">{r["due"] or ""}</td></tr>')
+                   f'<td class="n">{fmt(value) if value is not None else "–"}</td>'
+                   f'<td class="n">{fmt(r["tested"])}/{fmt(r["total"])}</td><td class="n">{fmt(r["due"] or "")}</td></tr>')
     return ('<table><tr><th>Name</th><th></th><th class="n">Ready</th><th class="n">Tested</th>'
             f'<th class="n">Due</th></tr>{"".join(out)}</table>')
 
 
+def readiness_headline(stats):
+    """Overall readiness with its coverage. Below 25% coverage there is no number: it would mislead."""
+    coverage = stats.get("coverage") if isinstance(stats.get("coverage"), dict) else {}
+    tested = int(num(coverage.get("tested", stats.get("topics_tested"))) or 0)
+    total = int(num(coverage.get("total", stats.get("topics_total"))) or 0)
+    overall, mastery = num(stats.get("overall")), num(stats.get("mastery"))
+    practised = f"{tested} of {plural(total, 'topic')} practised" if total else "No practice topics yet"
+    if mastery is not None and tested:
+        practised += f", averaging {mastery}/100"
+    if overall is not None and total and 4 * tested >= total:
+        return (f'<div class="big" style="margin-top:18px"><span class="num">{fmt(overall)}</span>'
+                f'<span class="out">/ 100 ready</span></div>'
+                f'<div style="margin-top:14px">{bar(overall, 100, pct_band(overall))}</div>'
+                f'<p class="meta" style="margin-top:10px">{fmt(practised)}.</p>')
+    need = max(0, (total + 3) // 4 - tested)
+    more = f" Practise {need} more for a readiness score." if need else ""
+    progress = f'<div style="margin-top:14px">{bar(tested, (total + 3) // 4, "blue")}</div>' if total else ""
+    return ('<div class="big" style="margin-top:18px"><span class="out">Not enough practice yet to give a readiness score'
+            f'</span></div>{progress}<p class="meta" style="margin-top:10px">{fmt(practised)}.{fmt(more)}</p>')
+
+
 def dashboard(stats):
-    overall = stats.get("overall")
     countdown = stats.get("countdown")
     chips = [streak_chip(stats.get("streak")),
-             f'<span class="chip">{plural(stats["due_today"], "review")} due</span>',
-             f'<span class="chip">{stats.get("new_today", 0)} new today · {stats.get("new_waiting", 0)} waiting</span>',
-             f'<span class="chip">{stats["topics_tested"]}/{stats["topics_total"]} topics tested</span>']
+             f'<span class="chip">{fmt(plural(stats["due_today"], "review"))} due</span>',
+             f'<span class="chip">{fmt(stats.get("new_today", 0))} new today · {fmt(stats.get("new_waiting", 0))} waiting</span>']
     if countdown and countdown["days"] >= 0:
-        when = "today" if countdown["days"] == 0 else f'in {countdown["days"]} days'
-        chips.insert(0, f'<span class="chip band-amber">{fmt(countdown["company"])} interview {when}</span>')
+        when = "today" if countdown["days"] == 0 else "tomorrow" if countdown["days"] == 1 else f'in {countdown["days"]} days'
+        chips.insert(0, f'<span class="chip band-amber">{fmt(countdown["company"])} interview {fmt(when)}</span>')
     untracked = [s for s in stats["skills"] if not s["total"]]
     untracked_line = ""
     if untracked:
@@ -274,10 +344,6 @@ def dashboard(stats):
                           sorted(untracked, key=lambda s: s.get("status") != "cv-only"))
         untracked_line = (f'<p class="meta" style="margin-top:12px">No practice questions yet: {names}. '
                           f'<code>/interviewly:prep &lt;skill&gt;</code> adds some.</p>')
-    coverage_note = ""
-    if stats["topics_total"] and stats["topics_tested"] / stats["topics_total"] < 0.25:
-        coverage_note = (f'<p class="meta" style="margin-top:10px">Based on {plural(stats["topics_tested"], "tested topic")} '
-                         f'out of {stats["topics_total"]}. A few drills will make this number reliable.</p>')
     weakest = "".join(f'<tr><td><code>{fmt(t["id"])}</code><div class="meta">{fmt(t.get("label"))}</div></td>'
                       f'<td class="n band-{band(t["last_score"])}">{fmt(shown(t["last_score"]))}/4</td>'
                       f'<td class="n">due {fmt(t.get("next_due"))}</td></tr>' for t in stats["weakest"])
@@ -289,9 +355,7 @@ def dashboard(stats):
   <div class="eyebrow"><b>Interviewly</b> · progress · {fmt(stats['date'])}</div>
   <h1>{fmt(stats.get('name') or 'Interview readiness')}</h1>
   <div class="meta">{fmt(stats.get('headline'))}{' · target level ' + fmt(stats['target_level']) if stats.get('target_level') else ''}</div>
-  <div class="big" style="margin-top:18px"><span class="num">{overall if overall is not None else '–'}</span><span class="out">/ 100 ready</span></div>
-  <div style="margin-top:14px">{bar(overall or 0, 100, pct_band(overall or 0))}</div>
-  {coverage_note}
+  {readiness_headline(stats)}
   <div class="chips">{''.join(chips)}</div>
 </section>
 <section class="card"><h2>Session scores</h2>{trend_svg(stats['sessions'])}</section>
@@ -307,20 +371,29 @@ def dashboard(stats):
 
 # ---------- share card ----------
 
-def share_card(review, streak=None):
-    score = review.get("score")
+def share_card(review, streak=None, show_focus=False):
+    """The 1200x630 image people post: the mode, score, label, streak and dimension bars only. The mode shows
+    only when it's one of Interviewly's own, and the project name only with show_focus (iv sets it for a project
+    setup recorded as public on GitHub). Never the top fixes or other reviewer text: they can name an employer, a
+    colleague or a CV claim the code contradicts."""
+    score = score_of(review.get("score"))
     b = band(score)
     colors = {"green": "#6bc46d", "blue": "#6cb6ff", "amber": "#e3b341", "red": "#f47067"}
-    mode = mode_name(review.get("mode"))
-    focus = review.get("focus_name") or review.get("focus") or ""
-    fix = (as_list(review.get("top_fixes")) or [""])[0]
-    current = num(streak.get("current")) if isinstance(streak, dict) else None
-    streak_line = f"🔥 {current}-day practice streak" if current and current >= 2 else ""
+    mode = review.get("mode").strip().lower() if isinstance(review.get("mode"), str) else ""
+    mode = mode_name(mode) if mode in MODES else ""
+    focus = focus_of(review) if show_focus else ""
     threads = [t for t in as_list(review.get("threads")) if isinstance(t, dict)]
+    label = review.get("label").strip() if isinstance(review.get("label"), str) else ""
+    if label not in (*LABELS.values(), "Strong session"):   # only a rubric label: the reviewer's text stays off
+        label = label_for(score, len(threads) or None)
+    elif label == LABELS["green"] and len(threads) < 5:     # the rubric needs 5 questions for Interview-ready
+        label = label_for(score, len(threads))
+    current = num(streak.get("current")) if isinstance(streak, dict) else None
+    streak_line = f"🔥 {fmt(current)}-day practice streak" if current and current >= 2 else ""
     dims = []
     for key, name in (("correctness", "Correctness"), ("depth", "Depth"), ("specificity", "Specific to my code"),
                       ("communication", "Communication")):
-        values = [num(t["scores"].get(key)) for t in threads if isinstance(t.get("scores"), dict)]
+        values = [score_of(t["scores"].get(key)) for t in threads if isinstance(t.get("scores"), dict)]
         values = [v for v in values if v is not None]
         if values:
             avg = sum(values) / len(values)
@@ -347,18 +420,14 @@ body {{ width: 1200px; height: 630px; background: #15161a; color: #ececef; font-
 .out {{ font-size: 44px; color: #8d93a0; }}
 .pill {{ align-self: center; margin-left: 12px; font-size: 26px; font-weight: 650; color: {colors[b]};
         border: 2px solid {colors[b]}55; background: {colors[b]}22; padding: 8px 22px; border-radius: 999px; }}
-.fix {{ margin-top: 28px; font-size: 23px; color: #b8bec9; display: -webkit-box; -webkit-line-clamp: 3;
-       -webkit-box-orient: vertical; overflow: hidden; }}
-.fix b {{ color: #ececef; }}
 .foot {{ margin-top: auto; display: flex; justify-content: space-between; font-size: 20px; color: #8d93a0; }}
 code {{ font-family: "SF Mono", Menlo, monospace; font-size: .85em; color: #f2c48d; }}
 </style></head><body>
 <div class="brand"><span>●</span> Interviewly</div>
 <div class="row"><div class="left">
-<div class="kicker">Mock interview · {fmt(mode)}{' · ' + fmt(focus) if focus else ''}</div>
+<div class="kicker">Mock interview{' · ' + fmt(mode) if mode else ''}{' · ' + fmt(focus) if focus else ''}</div>
 <div class="score"><span class="num">{fmt(shown(score))}</span><span class="out">/ 4</span>
-  <span class="pill">{fmt(review.get('label') or label_for(score))}</span></div>
-{f'<div class="fix"><b>Working on:</b> {fmt(fix)}</div>' if fix else ''}
+  <span class="pill">{fmt(label)}</span></div>
 </div>{panel}</div>
 <div class="foot"><span>{streak_line}</span><span>Practising on my own code · {REPO_URL}</span></div>
 </body></html>"""
@@ -366,32 +435,74 @@ code {{ font-family: "SF Mono", Menlo, monospace; font-size: .85em; color: #f2c4
 
 # ---------- PNG export ----------
 
+# The same browsers, order and INTERVIEWLY_BROWSER override as cv_to_pdf.py
 BROWSERS = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
     "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
     "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
 )
+BROWSER_NAMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge",
+                 "microsoft-edge-stable", "brave-browser", "chrome", "msedge")
+# The same hardening as cv_to_pdf.py's Chrome run: no first-run setup, extensions, background requests or
+# crash reports, and (in screenshot) a throwaway profile and temp folder
+CHROME_FLAGS = ("--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
+                "--disable-background-networking", "--disable-crash-reporter", "--disable-breakpad", "--hide-scrollbars")
 
 
 def find_browser():
+    env = os.environ.get("INTERVIEWLY_BROWSER")
+    if env and Path(env).exists():
+        return env
     for path in BROWSERS:
         if Path(path).exists():
             return path
-    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge"):
+    for name in BROWSER_NAMES:
         if shutil.which(name):
             return shutil.which(name)
     return None
 
 
+def is_png(path):
+    """True for a whole PNG file: the signature at the start and the IEND chunk at the end."""
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return False
+    return data.startswith(b"\x89PNG\r\n\x1a\n") and data.endswith(b"IEND\xaeB`\x82")
+
+
 def screenshot(page_path, png_path, width, height):
+    """Save a PNG of the page and return its path. Return None when there's no browser, and also when it
+    fails (saying why on stderr). An old PNG at png_path is removed first, so a failed run never hands
+    back an earlier image with an older score."""
+    png = Path(png_path)
+    png.unlink(missing_ok=True)
     browser = find_browser()
     if not browser:
         return None
-    cmd = [browser, "--headless=new", "--hide-scrollbars", "--force-device-scale-factor=2",
-           f"--window-size={width},{height}", f"--screenshot={png_path}", Path(page_path).as_uri()]
+    tmp = tempfile.mkdtemp(prefix="interviewly-share-")
+    # Chrome's profile, socket folder and crash files go in a private temp folder, not the system ones
+    env = dict(os.environ, TMPDIR=tmp, MAC_CHROMIUM_TMPDIR=tmp)
+    cmd = [browser, *CHROME_FLAGS, f"--user-data-dir={Path(tmp) / 'profile'}", "--force-device-scale-factor=2",
+           f"--window-size={width},{height}", f"--screenshot={png}", Path(page_path).as_uri()]
+    problem = None
     try:
-        subprocess.run(cmd, capture_output=True, timeout=60, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    return Path(png_path) if Path(png_path).exists() else None
+        result = subprocess.run(cmd, capture_output=True, timeout=60, check=False, env=env)
+        if result.returncode:
+            problem = f"exit code {result.returncode}"
+    except subprocess.TimeoutExpired:
+        problem = "it took over 60 seconds"
+    except OSError as e:
+        problem = str(e)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    if problem is None and is_png(png):
+        return png
+    png.unlink(missing_ok=True)
+    print(f"the browser couldn't make the PNG ({problem or 'it wrote no complete image'})", file=sys.stderr)
+    return None

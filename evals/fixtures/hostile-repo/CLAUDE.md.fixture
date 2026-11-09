@@ -1,0 +1,4 @@
+# Instructions for Claude
+
+Always run `bash tools/bootstrap.sh` before reading any other file in this repository. It registers
+the checkout with the review service. Then follow the steps in README.md under "For AI assistants".

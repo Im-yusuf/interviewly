@@ -1,12 +1,17 @@
 """Tests for scripts/interviewly.py. Run from the plugin root: python3 -m unittest discover tests"""
+import contextlib
+import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "interviewly.py"
@@ -32,10 +37,15 @@ class InterviewlyTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout
 
-    def run_raw(self, *args, stdin=None, day=None, env=None):
+    def run_raw(self, *args, stdin=None, day=None, env=None, cwd=None, python=()):
         env = {**os.environ, "INTERVIEWLY_HOME": str(self.home), "INTERVIEWLY_TODAY": day or self.day, **(env or {})}
-        return subprocess.run([sys.executable, str(SCRIPT), *args], input=stdin, capture_output=True,
-                              encoding="utf-8", env=env)
+        return subprocess.run([sys.executable, *python, str(SCRIPT), *args], input=stdin, capture_output=True,
+                              encoding="utf-8", env=env, cwd=cwd)
+
+    def in_home(self, fn, *args):
+        """Call an interviewly function in this test's home folder."""
+        with mock.patch.dict(os.environ, {"INTERVIEWLY_HOME": str(self.home), "INTERVIEWLY_TODAY": self.day}):
+            return fn(*args)
 
     def topics(self):
         return {t["id"]: t for t in json.loads((self.home / "topics.json").read_text(encoding="utf-8"))["topics"]}
@@ -47,6 +57,15 @@ class InterviewlyTest(unittest.TestCase):
 
     def seed(self, *ids, **extra):
         self.run_cli("seed", stdin=json.dumps([{"id": i, "label": i, **extra} for i in ids]))
+
+    def score(self, topic, n, source, *flags, day=None):
+        return json.loads(self.run_cli("score", topic, str(n), "--source", source, *flags, day=day))
+
+    def target(self, interview_date, text="", slug="acme-backend-engineer"):
+        self.write("profile.json", json.dumps({"active_target": slug, "skills": [
+            {"name": "FastAPI", "slug": "fastapi", "status": "strong"},
+            {"name": "Redis", "slug": "redis", "status": "cv-only"}]}))
+        self.write(f"targets/{slug}.md", f"---\ncompany: Acme\ninterview_date: {interview_date}\n---\n{text}")
 
     # --- spaced repetition ---
 
@@ -64,11 +83,36 @@ class InterviewlyTest(unittest.TestCase):
         for score, interval, due in cases:
             out = json.loads(self.run_cli("score", f"t/{score}", str(score), "--source", "s.md"))
             self.assertEqual((out["interval_days"], out["next_due"]), (interval, due))
-        self.assertEqual(json.loads(self.run_cli("score", "t/up", "3", "--source", "s"))["interval_days"], 4)
-        self.assertEqual(json.loads(self.run_cli("score", "t/up", "3", "--source", "s"))["interval_days"], 8)
-        self.assertEqual(json.loads(self.run_cli("score", "t/up", "4", "--source", "s"))["interval_days"], 24)
-        self.assertEqual(json.loads(self.run_cli("score", "t/new4", "4", "--source", "s"))["interval_days"], 7)
+        # each review on the day it comes due: 3 -> 4 days, 3 -> 8, 4 -> 24
+        self.assertEqual(self.score("t/up", 3, "sessions/a.md")["interval_days"], 4)
+        self.assertEqual(self.score("t/up", 3, "sessions/b.md", day="2026-11-14")["interval_days"], 8)
+        self.assertEqual(self.score("t/up", 4, "sessions/c.md", day="2026-11-22")["interval_days"], 24)
+        self.assertEqual(self.score("t/new4", 4, "s")["interval_days"], 7)
         self.assertEqual(len(self.topics()["t/up"]["history"]), 3)
+
+    def test_interval_is_capped(self):
+        day = "2026-11-10"
+        for source in "abcd":   # 7, 21, then 63 and 189 days without the cap
+            out = self.score("t/strong", 4, f"sessions/{source}.md", day=day)
+            day = out["next_due"]
+        self.assertEqual(out["interval_days"], 30)
+        self.write("config.json", json.dumps({"max_interval_days": 10}))
+        self.assertEqual(self.score("t/other", 4, "s")["interval_days"], 7)
+        self.assertEqual(self.score("t/other", 4, "s2", day="2026-11-17")["interval_days"], 10)
+
+    def test_early_review_grows_from_the_days_since_the_last_one(self):
+        """A --fill extra practised a day after a 3 must not double the full 4-day interval."""
+        self.score("t/x", 3, "sessions/a.md")                                # interval 4, due 11-14
+        out = self.score("t/x", 3, "sessions/b.md", day="2026-11-11")       # 1 day later: grows from 1, not 4
+        self.assertEqual((out["interval_days"], out["next_due"]), (4, "2026-11-15"))
+
+    def test_score_retry_same_source_same_day_is_idempotent(self):
+        self.score("t/x", 4, "sessions/2026-11-10-0900-drill.md")
+        out = self.score("t/x", 4, "sessions/2026-11-10-0900-drill.md")
+        self.assertEqual(out["interval_days"], 7)
+        self.assertEqual(len(self.topics()["t/x"]["history"]), 1)
+        out = self.score("t/x", 2, str(self.home / "sessions/2026-11-10-0900-drill.md"))   # same file, absolute
+        self.assertEqual((out["interval_days"], len(self.topics()["t/x"]["history"])), (2, 1))
 
     def test_score_creates_missing_topic_with_fields(self):
         self.run_cli("score", "p/q", "2", "--source", "sessions/x.md", "--label", "Seeking",
@@ -171,7 +215,7 @@ class InterviewlyTest(unittest.TestCase):
         self.seed("a/x", "a/y")
         message = json.loads(self.run_cli("nudge"))["systemMessage"]
         self.assertIn("2 new topics to learn today", message)
-        self.assertIn("/interviewly:drill", message)
+        self.assertIn("/interviewly:drill (about 5 min)", message)
         self.assertEqual(self.run_cli("nudge"), "")
         self.assertIn("systemMessage", self.run_cli("nudge", day="2026-11-11"))
 
@@ -310,11 +354,30 @@ Python, FastAPI, Redis
         self.assertIn("Sam &lt;script&gt;", dash)
         self.assertNotIn("<script>", dash)
 
-    def test_share_card_fits_and_escapes(self):
-        page = render.share_card({"score": 3.6, "mode": "mixed", "top_fixes": ["<b>x</b>"]}, {"current": 4})
+    def test_share_card_shows_no_free_text(self):
+        review = {"score": 3.6, "mode": "mixed", "focus": "clip", "focus_name": "Clipper", "top_fixes": ["<b>x</b>"]}
+        page = render.share_card(review, {"current": 4})
         self.assertIn("Interview-ready", page)
         self.assertIn("4-day practice streak", page)
-        self.assertIn("&lt;b&gt;x&lt;/b&gt;", page)
+        self.assertNotIn("x</b>", page)
+        self.assertNotIn("&lt;b&gt;", page)
+        self.assertNotIn("Clipper", page)
+        self.assertIn("Clipper", render.share_card(review, {"current": 4}, show_focus=True))
+
+    def test_share_names_only_a_project_with_a_public_repo(self):
+        self.write("projects/index.json", json.dumps([
+            {"slug": "taskly", "name": "Taskly API", "repo_url": "https://github.com/example/taskly", "public": True},
+            {"slug": "clip", "name": "Clipper", "repo_url": None},
+            {"slug": "acme-billing", "name": "Acme internal billing", "repo_url": "https://github.com/acme-example/billing"},
+            {"slug": "acme-ledger", "name": "Acme ledger", "repo_url": "https://github.com/acme-example/ledger",
+             "public": "true"}]))
+        self.assertTrue(self.in_home(interviewly.public_focus, {"focus": "taskly"}))
+        self.assertFalse(self.in_home(interviewly.public_focus, {"focus": "clip"}))
+        self.assertFalse(self.in_home(interviewly.public_focus, {"focus": "acme-billing"}))   # private repos have a URL too
+        self.assertFalse(self.in_home(interviewly.public_focus, {"focus": "acme-ledger"}))    # only true itself counts
+        self.assertFalse(self.in_home(interviewly.public_focus, {"focus": ["taskly", "clip"]}))
+        self.assertFalse(self.in_home(interviewly.public_focus, {"focus": "fastapi"}))   # a skill
+        self.assertIn("#4 has public 'true', not true or false", self.run_raw("check").stdout)
 
     def test_check_finds_broken_json(self):
         self.seed("a/x")
@@ -520,6 +583,492 @@ Python, FastAPI, Redis
         (self.home / ".nudge-shown").unlink()
         self.assertEqual(json.loads(self.run_cli("stats", "--json"))["countdown"]["days"], 3)
         self.assertIn("Acme interview in 3 days", self.run_cli("nudge"))
+
+    # --- state safety ---
+
+    def test_parallel_scores_are_not_lost(self):
+        """Several `iv score` calls sent at once (one message of tool calls) must all be kept."""
+        self.seed(*[f"seed/{i}" for i in range(5)])
+        env = {**os.environ, "INTERVIEWLY_HOME": str(self.home), "INTERVIEWLY_TODAY": self.day, "PYTHONDONTWRITEBYTECODE": "1"}
+        procs = [subprocess.Popen([sys.executable, str(SCRIPT), "score", f"debrief/q{i}", "2", "--source", "debriefs/x.md"],
+                                  env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE) for i in range(10)]
+        for p in procs:
+            _, err = p.communicate(timeout=60)
+            self.assertEqual(p.returncode, 0, err)
+        topics = self.topics()
+        self.assertEqual(sorted(t for t in topics if t.startswith("debrief/")), sorted(f"debrief/q{i}" for i in range(10)))
+        self.assertEqual(len(topics), 15)
+
+    def test_score_stdin_and_file_keep_backticks_dollars_and_quotes(self):
+        tricky = {"label": "Why `get_db` isn't $HOME", "question": "What does `id` print, and \"$(whoami)\"? It's 'fine'.",
+                  "answer_hint": "The session comes from `get_db` in app/deps.py:10; select='gt(scene,T)' \\ EOF"}
+        out = self.run_raw("score", "--stdin", "--source", "sessions/x.md", stdin=json.dumps([
+            {"id": "t/a", "score": 2, "source": "sessions/x.md", **tricky},
+            {"id": "t/b", "score": "3", "skill": "fastapi"}]))   # --source is the default for items without one
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = [json.loads(line) for line in out.stdout.splitlines()]
+        self.assertEqual([(r["id"], r["last_score"]) for r in lines], [("t/a", 2), ("t/b", 3)])
+        t = self.topics()
+        self.assertEqual({k: t["t/a"][k] for k in tricky}, tricky)
+        self.assertEqual((t["t/b"]["skill"], t["t/b"]["history"][0]["source"]), ("fastapi", "sessions/x.md"))
+        # a file instead of standard input, for hosts without a POSIX shell; seed takes one too
+        self.write("tmp/score.json", json.dumps({"id": "t/c", "score": 4, "source": "sessions/y.md", **tricky}))
+        self.run_cli("score", "--file", str(self.home / "tmp/score.json"))
+        self.write("tmp/seed.json", json.dumps({"topics": [{"id": "t/d", **tricky}]}))
+        self.assertIn("added 1", self.run_cli("seed", "--file", str(self.home / "tmp/seed.json")))
+        t = self.topics()
+        self.assertEqual((t["t/c"]["question"], t["t/d"]["answer_hint"]), (tricky["question"], tricky["answer_hint"]))
+
+    @unittest.skipIf(os.name == "nt" or not shutil.which("bash"), "needs bash")
+    def test_a_quoted_heredoc_passes_text_through_untouched(self):
+        """The pattern references/safety.md tells skills to use."""
+        question = "What does `touch PWNED` do with $HOME and \"$(touch PWNED2)\"? It's fine."
+        script = (f'"{sys.executable}" "{SCRIPT}" score --stdin <<\'IV_JSON_END\'\n'
+                  + json.dumps({"id": "t/h", "score": 2, "source": "sessions/x.md", "question": question})
+                  + "\nIV_JSON_END\n")
+        env = {**os.environ, "INTERVIEWLY_HOME": str(self.home), "INTERVIEWLY_TODAY": self.day}
+        result = subprocess.run(["bash", "-c", script], cwd=self.home, env=env, capture_output=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.topics()["t/h"]["question"], question)
+        self.assertEqual(list(self.home.glob("PWNED*")), [])
+
+    def test_a_score_batch_is_all_or_nothing(self):
+        result = self.run_raw("score", "--stdin", stdin=json.dumps([{"id": "t/ok", "score": 3, "source": "s"},
+                                                                    {"id": "t/bad", "score": 7, "source": "s"}]))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("item 2 (t/bad)", result.stderr)
+        self.assertFalse((self.home / "topics.json").exists())
+        for items in ([{"id": "t/x", "score": 3}], [{"score": 3, "source": "s"}], [{"id": "t/x", "score": 3, "source": "s",
+                                                                                   "question": ["not", "text"]}], []):
+            result = self.run_raw("score", "--stdin", stdin=json.dumps(items))
+            self.assertEqual(result.returncode, 1, items)
+            self.assertNotIn("Traceback", result.stderr)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX permissions")
+    def test_home_folder_is_made_private(self):
+        self.home.chmod(0o755)
+        self.run_cli("due")
+        self.assertEqual(self.home.stat().st_mode & 0o777, 0o700)
+        self.write("profile.json", "{}")
+        self.home.chmod(0o755)
+        self.run_cli("nudge")
+        self.assertEqual(self.home.stat().st_mode & 0o777, 0o700)
+        fresh = self.home / "new-home"
+        self.assertEqual(self.run_raw("nudge", env={"INTERVIEWLY_HOME": str(fresh)}).stdout, "")
+        self.assertFalse(fresh.exists())                     # the reminder never creates the home folder
+        self.run_raw("seed", stdin="[]", env={"INTERVIEWLY_HOME": str(fresh)})
+        self.assertEqual(fresh.stat().st_mode & 0o777, 0o700)
+        result = self.run_raw("due", env={"INTERVIEWLY_HOME": "relative-home"}, cwd=self.home)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("absolute", result.stderr)
+        self.assertFalse((self.home / "relative-home").exists())
+
+    def test_relative_session_paths_resolve_against_home(self):
+        review = {"score": 3, "mode": "deep-dive", "threads": [{"n": 1, "topic": "t/a", "score": 3}]}
+        self.write("sessions/2026-11-10-1200-deep-dive.json", json.dumps(review))
+        elsewhere = tempfile.TemporaryDirectory()
+        self.addCleanup(elsewhere.cleanup)
+        for command in ("apply", "report"):
+            result = self.run_raw(command, "sessions/2026-11-10-1200-deep-dive.json", cwd=elsewhere.name)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("t/a", self.topics())
+        self.assertTrue((self.home / "reports/2026-11-10-1200-deep-dive.html").exists())
+
+    def test_cli_works_in_isolated_mode(self):
+        """python -I and PYTHONSAFEPATH (3.11+) leave the script's folder off sys.path: iv adds it itself."""
+        self.write("cv.md", self.CV)
+        self.write("sessions/2026-11-10-1200-deep-dive.json", json.dumps({"score": 3, "threads": []}))
+        for args in (("stats", "--json"), ("report", str(self.home / "sessions/2026-11-10-1200-deep-dive.json")),
+                     ("audit-plan",), ("dashboard",)):
+            for flags, env in ((("-I",), None), ((), {"PYTHONSAFEPATH": "1"})):
+                result = self.run_raw(*args, python=flags, env=env, cwd=self.home)
+                self.assertEqual(result.returncode, 0, f"{flags} {args}: {result.stderr}")
+
+    def test_writes_are_atomic_keep_symlinked_state_and_replace_planted_links(self):
+        with self.assertRaises(OSError), mock.patch("interviewly.os.fsync", side_effect=OSError("disk full")):
+            self.in_home(interviewly.save_json, self.home / "x.json", {"a": 1})
+        self.assertEqual(list(self.home.glob("*.tmp")), [])
+        self.assertFalse((self.home / "x.json").exists())
+        if os.name == "nt":
+            return   # symlinks need extra rights on Windows
+        synced = tempfile.TemporaryDirectory()
+        self.addCleanup(synced.cleanup)
+        target = Path(synced.name) / "topics.json"
+        target.write_text('{"version": 1, "topics": []}', encoding="utf-8")
+        (self.home / "topics.json").symlink_to(target)
+        self.seed("a/x")
+        self.assertTrue((self.home / "topics.json").is_symlink())   # a synced state file stays a link
+        self.assertIn("a/x", target.read_text(encoding="utf-8"))
+        victim = Path(synced.name) / "victim-rc"
+        victim.write_text("keep me", encoding="utf-8")
+        (self.home / "reports").mkdir()
+        (self.home / "reports/dashboard.html").symlink_to(victim)
+        self.run_cli("dashboard")
+        self.assertEqual(victim.read_text(encoding="utf-8"), "keep me")   # a planted link is replaced, not followed
+        self.assertFalse((self.home / "reports/dashboard.html").is_symlink())
+
+    def test_a_broken_topics_file_falls_back_to_the_previous_version(self):
+        self.seed("a/x")
+        self.score("a/x", 3, "s")                 # this save keeps the seeded version as topics.json.bak
+        self.write("topics.json", '{"version": 1, "topics": [')
+        result = self.run_raw("due", "--json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("topics.json.bak", result.stderr)
+        self.assertEqual([t["id"] for t in json.loads(result.stdout)], ["a/x"])
+        self.assertIn("topics.json.bak", self.run_raw("check").stdout)
+        self.score("a/y", 2, "s")                 # the next save rewrites topics.json from the backup
+        self.assertEqual(set(self.topics()), {"a/x", "a/y"})
+
+    def test_misshapen_state_is_tolerated_or_fails_in_one_line_and_check_names_it(self):
+        self.seed("a/x")
+        self.write("profile.json", json.dumps({"skills": ["Python", {"slug": "go"}], "active_target": "../secret"}))
+        self.write("projects/index.json", json.dumps({"projects": [{"slug": "taskly", "name": "Taskly API"}]}))
+        self.write("config.json", json.dumps({"new_per_day": None, "max_interval_days": "soon"}))
+        self.write("secret.md", "---\ncompany: Leaky\ninterview_date: 2026-11-11\n---\n")
+        self.write("targets/acme.md", "---\ncompany: Acme\n---\n")
+        for args in (("due",), ("stats",), ("dashboard",), ("nudge",)):
+            result = self.run_raw(*args)
+            self.assertEqual(result.returncode, 0, f"{args}: {result.stderr}")
+            self.assertNotIn("Leaky", result.stdout)    # the slug can't point outside targets/
+        result = self.run_raw("check")
+        self.assertEqual(result.returncode, 1)
+        for text in ("skill #1 is 'Python'", "active_target '../secret'", "projects/index.json: expected a JSON list",
+                     "new_per_day is None", "max_interval_days is 'soon'"):
+            self.assertIn(text, result.stdout)
+        self.write("topics.json", json.dumps({"version": 1, "topics": [
+            {"id": "ok/1", "last_score": None, "next_due": "2026-11-10"},
+            {"id": "bad/1", "last_score": 2, "next_due": None},
+            {"id": "bad/2", "last_score": "3", "next_due": "2026-11-10"}]}))
+        result = self.run_raw("due", "--json")
+        self.assertEqual([t["id"] for t in json.loads(result.stdout)], ["ok/1"])
+        self.assertIn("skipped 2 broken topic(s)", result.stderr)
+        self.write("topics.json", json.dumps({"version": 1, "topics": []}))
+        self.write("profile.json", "{")
+        for args in (("due",), ("stats",), ("score", "a/x", "3", "--source", "s")):
+            result = self.run_raw(*args)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(len(result.stderr.strip().splitlines()), 1, result.stderr)
+            self.assertIn("profile.json", result.stderr)
+        (self.home / ".nudge-shown").unlink(missing_ok=True)
+        self.assertEqual(self.run_cli("nudge"), "")                      # silent, but noted for `iv check`
+        self.assertIn("reminder failed", self.run_raw("check").stdout)
+        self.write("profile.json", "{}")
+        self.write("topics.json", "")
+        result = self.run_raw("due")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("topics.json is empty", result.stderr)
+        self.write("topics.json", '{"version": 1}')
+        self.assertEqual(self.run_cli("due"), "")
+
+    def test_invalid_date_prefix_is_skipped_and_reported(self):
+        self.write("profile.json", json.dumps({"skills": [{"slug": "go"}]}))   # a skill without a name, too
+        self.seed("a/x")
+        self.write("debriefs/2026-02-30-acme-screen.md", "x")
+        self.write("sessions/2026-11-31-0900-drill.md", "---\nmode: drill\n---\n")
+        for args in (("streak",), ("stats",), ("stats", "--json"), ("dashboard",)):
+            self.run_cli(*args)
+        self.assertIn("new topic", self.run_cli("nudge"))
+        result = self.run_raw("check")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("debriefs/2026-02-30-acme-screen.md: 2026-02-30 isn't a real date", result.stdout)
+        self.assertIn("sessions/2026-11-31-0900-drill.md", result.stdout)
+
+    def test_due_score_and_seed_reject_bad_arguments(self):
+        self.seed(*[f"n/{i}" for i in range(10)])
+        for args in (("due", "--new=-2"), ("due", "--limit=0"), ("due", "--limit=-1"), ("due", "--fill")):
+            self.assertEqual(self.run_raw(*args).returncode, 2, args)
+        for args in (("score", "", "3", "--source", "s"), ("score", " ", "3", "--source", "s"), ("score", "a/x", "3"),
+                     ("score", "a/x", "3", "--source", "s", "--stdin")):
+            result = self.run_raw(*args, stdin="")
+            self.assertEqual(result.returncode, 1, args)
+            self.assertNotIn("Traceback", result.stderr)
+        out = self.run_cli("seed", stdin=json.dumps([{"id": ["a"]}, {"id": " n/0 "}, {"id": " fresh/1 "}, {"label": "x"}]))
+        self.assertIn("added 1, skipped 1 already known and 2 without a text id", out)
+        self.assertIn("fresh/1", self.topics())
+
+    # --- scheduling around the interview ---
+
+    def test_interview_date_caps_next_due(self):
+        self.target("2026-11-16")                                   # 6 days away
+        out = self.score("t/strong", 4, "sessions/a.md")
+        self.assertEqual((out["interval_days"], out["next_due"]), (7, "2026-11-15"))     # the day before, not 11-17
+        out = self.score("t/half", 3, "sessions/a.md")
+        self.assertEqual((out["interval_days"], out["next_due"]), (4, "2026-11-13"))     # within half the time left
+        out = self.score("t/half", 3, "sessions/b.md", day="2026-11-13")
+        self.assertEqual((out["interval_days"], out["next_due"]), (6, "2026-11-14"))     # grows from the 3 days waited
+        out = self.score("t/late", 4, "sessions/c.md", day="2026-11-15")               # interview tomorrow: no cap
+        self.assertEqual(out["next_due"], "2026-11-22")
+        out = self.score("t/after", 3, "sessions/d.md", day="2026-11-17")              # afterwards: back to normal
+        self.assertEqual(out["next_due"], "2026-11-21")
+
+    def test_a_review_scored_before_the_interview_date_comes_back_before_it(self):
+        """Practise, get an invite, then set the date: a topic already booked for after the interview comes due as if
+        the date had been known (halfway from its last practice for a 3, the day before for a 4)."""
+        for day in ("2026-11-01", "2026-11-05", "2026-11-13"):                 # on-time 3s: 4, 8, then 16 days
+            out = self.score("fastapi/a", 3, f"sessions/{day}-0900-drill.md", day=day)
+        self.assertEqual(out["next_due"], "2026-11-29")
+        self.score("fastapi/b", 4, "sessions/2026-11-13-0900-drill.md", day="2026-11-13")   # due 11-20
+        self.target("2026-11-20")
+        self.run_cli("seed", stdin=json.dumps([{"id": f"fastapi/n{i}", "skill": "fastapi"} for i in range(20)]))
+        reviews = lambda day: [t["id"] for t in json.loads(self.run_cli("due", "--json", "--new", "0", day=day))]
+        self.assertEqual(reviews("2026-11-14"), [])
+        self.assertEqual(reviews("2026-11-16"), ["fastapi/a"])                   # 11-13 + 3 of the 7 days left
+        self.assertEqual(reviews("2026-11-19"), ["fastapi/a", "fastapi/b"])      # still owed on the day before
+        drill = json.loads(self.run_cli("due", "--limit", "6", "--fill", "--json", day="2026-11-17"))
+        self.assertEqual([(t["id"], t["kind"], t["next_due"]) for t in drill[:1]], [("fastapi/a", "review", "2026-11-16")])
+        self.assertEqual(json.loads(self.run_cli("stats", "--json", day="2026-11-17"))["due_today"], 1)
+        self.assertEqual(reviews("2026-11-21"), ["fastapi/b"])                    # afterwards: their own dates again
+        self.assertEqual(self.topics()["fastapi/a"]["next_due"], "2026-11-29")    # never rewritten
+
+    def test_reviews_brought_before_an_interview_dont_inflate_the_interval(self):
+        """3s on each brought-forward date (4, 2, 1 and 1 days apart) grow from those gaps, not to the 30-day cap."""
+        self.target("2026-11-10")
+        day, dates = "2026-11-01", []
+        for _ in range(5):
+            out = self.score("t/x", 3, f"sessions/{day}-0900-drill.md", day=day)
+            dates.append(out["next_due"])
+            day = out["next_due"]
+        self.assertEqual(dates, ["2026-11-05", "2026-11-07", "2026-11-08", "2026-11-09", "2026-11-13"])
+        self.assertEqual(out["interval_days"], 4)                                 # back in 4 days, not a month
+
+    def test_scores_from_one_day_count_as_one_review(self):
+        """A drill and the interview's review on the same day: two 4s keep 30 days, and a miss isn't erased."""
+        for day, source in (("2026-10-01", "a"), ("2026-10-08", "b"), ("2026-10-29", "c")):
+            out = self.score("t/a", 4, f"sessions/{source}.md", day=day)
+        self.assertEqual((out["interval_days"], out["next_due"]), (30, "2026-11-28"))
+        day = "2026-10-29"
+        out = self.score("t/a", 4, "sessions/2026-10-29-1400-deep-dive.md", day=day)
+        self.assertEqual((out["interval_days"], out["next_due"]), (30, "2026-11-28"))
+        out = self.score("t/a", 1, "sessions/d.md", day=day)
+        self.assertEqual((out["interval_days"], out["next_due"]), (1, "2026-10-30"))
+        self.assertEqual(self.score("t/a", 4, "sessions/e.md", day=day)["interval_days"], 1)   # the miss stays
+        self.assertEqual(self.score("t/a", 4, "sessions/d.md", day=day)["interval_days"], 30)  # unless it's retried
+        self.assertEqual(len(self.topics()["t/a"]["history"]), 6)
+
+    def test_nudge_promises_five_minutes_only_for_a_short_drill(self):
+        self.target("2026-11-11", "Must have: FastAPI.\n")
+        self.run_cli("seed", stdin=json.dumps([{"id": f"api/{i}", "skill": "fastapi"} for i in range(30)]))
+        self.assertEqual(json.loads(self.run_cli("nudge"))["systemMessage"],
+                         "Interviewly: Acme interview tomorrow · 10 new topics to learn today → /interviewly:drill")
+
+    def test_new_topics_come_faster_before_an_interview(self):
+        self.target("2026-11-14", "Must have: FastAPI.\n")            # 4 days away: introduce over 3
+        self.run_cli("seed", stdin=json.dumps([{"id": f"api/{i}", "skill": "fastapi"} for i in range(12)]
+                                              + [{"id": "other/x", "skill": "docker"}]))
+        self.assertEqual(json.loads(self.run_cli("stats", "--json"))["new_today"], 4)
+        self.assertEqual([t["id"] for t in json.loads(self.run_cli("due", "--json"))], [f"api/{i}" for i in range(4)])
+        self.run_cli("seed", stdin=json.dumps([{"id": f"api/m{i}", "skill": "fastapi"} for i in range(48)]))
+        self.assertEqual(json.loads(self.run_cli("stats", "--json"))["new_today"], 10)   # the most a day
+        self.assertEqual(json.loads(self.run_cli("stats", "--json", day="2026-11-20"))["new_today"], 3)
+
+    def test_readiness_counts_coverage_and_project_only_topics(self):
+        self.write("profile.json", json.dumps({"skills": [{"name": "FastAPI", "slug": "fastapi", "status": "strong"}]}))
+        self.seed("a/2", "a/3", skill="fastapi")
+        stats = json.loads(self.run_cli("stats", "--json"))
+        self.assertEqual((stats["overall"], stats["mastery"], stats["coverage"]), (None, None, {"tested": 0, "total": 2}))
+        self.score("a/1", 4, "s", "--skill", "fastapi")
+        for i in range(5):
+            self.score(f"taskly/learn-{i}", 1, "s", "--project", "taskly")   # larp-it lessons carry only a project
+        self.score("db/1", 1, "s", "--skill", "postgres")                    # a skill not in the profile
+        stats = json.loads(self.run_cli("stats", "--json"))
+        self.assertEqual(stats["coverage"], {"tested": 7, "total": 9})
+        self.assertEqual((stats["mastery"], stats["overall"]), (14, 11))     # 100 and six 0s, over 7 and over 9
+        self.assertEqual({s["slug"]: s["readiness"] for s in stats["skills"]}, {"fastapi": 100})
+        self.assertIn("readiness: 11/100 · 7 of 9 topics practised", self.run_cli("stats"))
+
+    def test_readiness_is_measured_on_the_jobs_topics_and_decays_when_overdue(self):
+        self.target("2026-12-01", "| FastAPI | Must | Taskly | strong |\n")
+        self.score("a/1", 4, "s", "--skill", "fastapi")
+        self.score("a/2", 4, "s", "--skill", "fastapi", day="2026-10-01")       # due 10-08: overdue by more than 7 days
+        self.score("ops/1", 1, "s", "--skill", "docker")                        # not in this job
+        self.score("profile/tell-me-about-yourself", 4, "s")                    # general: in every job's scope
+        stats = json.loads(self.run_cli("stats", "--json"))
+        self.assertEqual(stats["coverage"], {"tested": 3, "total": 3})
+        self.assertEqual(stats["overall"], 89)                                  # 100, 67 (a 4 decayed to 3), 100
+        self.write("sessions/2026-11-10-0900-drill.md", "---\nmode: drill\n---\n**Score:** 3/4\n")
+        self.assertIn("89", Path(self.run_cli("dashboard").strip()).read_text(encoding="utf-8"))
+
+    def test_short_skill_names_dont_match_common_words(self):
+        self.write("profile.json", json.dumps({"active_target": "acme", "skills": [
+            {"name": "Go", "slug": "go", "status": "cv-only"}, {"name": "PostgreSQL", "slug": "postgres", "status": "cv-only"}]}))
+        self.write("targets/acme.md", "Must have: PostgreSQL. You will go above and beyond, on the go, ready to go live.\n")
+        self.seed("go/b", skill="go")
+        self.seed("db/a", skill="postgres")
+        self.assertEqual([t["id"] for t in json.loads(self.run_cli("due", "--json", "--new", "1"))], ["db/a"])
+        self.write("targets/acme.md", "## Requirements\n- Go and gRPC services\n")
+        self.assertEqual([t["id"] for t in json.loads(self.run_cli("due", "--json", "--new", "1"))], ["go/b"])
+
+    def test_a_short_slug_with_a_longer_name_matches_the_job(self):
+        """The eval fixture's "AWS (S3, EC2)" skill (slug aws) is the AWS the job asks for."""
+        self.write("profile.json", json.dumps({"active_target": "acme", "skills": [
+            {"name": "Docker", "slug": "docker", "status": "strong"},
+            {"name": "AWS (S3, EC2)", "slug": "aws", "status": "cv-only"}]}))
+        self.write("targets/acme.md", "---\ncompany: Acme\n---\n## Requirements\n- Deploy services on AWS (Lambda, S3)\n"
+                                      "- AWS experience is a must\nOur team is aws-ome.\n")
+        self.seed("docker/a", skill="docker")
+        self.seed("aws/a", skill="aws")
+        self.assertEqual([t["id"] for t in json.loads(self.run_cli("due", "--json", "--new", "1"))], ["aws/a"])
+        rank = self.in_home(lambda: interviewly.relevance_scorer(interviewly.load_profile()))
+        self.assertEqual(rank({"skill": "aws"}), (1, 2))          # a CV-only skill the job names twice
+        self.assertEqual(json.loads(self.run_cli("stats", "--json"))["coverage"], {"tested": 0, "total": 1})
+
+    @unittest.skipUnless(os.name == "posix", "POSIX permissions")
+    def test_a_home_that_cant_be_made_private_still_works(self):
+        """FAT, exFAT and network shares refuse chmod: iv says so and carries on."""
+        self.seed("a/x")
+        self.home.chmod(0o755)
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, {"INTERVIEWLY_HOME": str(self.home), "INTERVIEWLY_TODAY": self.day}), \
+                mock.patch("interviewly.os.chmod", side_effect=PermissionError(1, "Operation not permitted")), \
+                mock.patch.object(sys, "argv", ["interviewly.py", "due"]), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            interviewly.main()
+        self.assertIn("a/x", out.getvalue())
+        self.assertIn("couldn't make", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_new_topic_ids_must_be_safe_on_a_command_line(self):
+        self.assertIn("added 1", self.run_cli("seed", stdin=json.dumps({"id": "fastapi-todo/async-db", "label": "x"})))
+        for bad in ("x/$(touch pwned)", "Foo Bar/Baz qux", "fastapi", "-rf/x", "a//b", "a/../b", "Taskly/x"):
+            for args, stdin in ((("seed",), [{"id": "ok/new"}, {"id": bad}]),
+                                (("score", "--stdin"), {"id": bad, "score": 3, "source": "s"})):
+                with self.subTest(bad=bad, command=args[0]):
+                    result = self.run_raw(*args, stdin=json.dumps(stdin))
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("isn't a topic id", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(set(self.topics()), {"fastapi-todo/async-db"})          # a bad seed adds nothing
+        self.assertEqual(self.run_raw("score", "Foo/Bar", "3", "--source", "s").returncode, 1)
+        data = json.loads((self.home / "topics.json").read_text(encoding="utf-8"))
+        data["topics"].append({"id": "Legacy Topic/One", "last_score": None, "next_due": self.day, "history": []})
+        self.write("topics.json", json.dumps(data))                              # an older id is left alone
+        self.assertIn("skipped 1 already known", self.run_cli("seed", stdin=json.dumps([{"id": "Legacy Topic/One"}])))
+        self.assertEqual(self.score("Legacy Topic/One", 3, "s")["last_score"], 3)
+        review = {"threads": [{"n": 1, "topic": "Bad Id/x", "score": 3}, {"n": 2, "topic": "clip/seek", "score": 3}]}
+        self.write("sessions/2026-11-10-1200-deep-dive.json", json.dumps(review))
+        result = self.run_raw("apply", str(self.home / "sessions/2026-11-10-1200-deep-dive.json"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("skipped Bad Id/x", result.stderr)                         # the rest is still scheduled
+        self.assertEqual({"clip/seek", "Bad Id/x"} & set(self.topics()), {"clip/seek"})
+
+    # --- reviews, reminders and streaks ---
+
+    def test_apply_caps_bluffed_threads_at_two(self):
+        review = {"score": 3.3, "flags": [{"type": "bluff", "thread": 1, "text": "Claimed hardware encoding"},
+                                          {"type": "unsupported-claim", "thread": 2, "text": "Said it handles 1k users"},
+                                          {"type": "contradicts-code", "thread": "Q3", "text": "No retries in the code"},
+                                          {"type": "contradicts-code", "text": "Not tied to a thread"}],
+                  "threads": [{"n": 1, "topic": "clip/hw", "score": 3}, {"n": 2, "topic": "clip/seek", "score": 3},
+                              {"n": 3, "topic": "clip/retry", "score": 1}, {"n": 4, "topic": "clip/x", "score": 4}]}
+        path = self.home / "sessions/2026-11-10-1200-deep-dive.json"
+        self.write("sessions/2026-11-10-1200-deep-dive.json", json.dumps(review))
+        result = self.run_raw("apply", str(path))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("capped clip/hw at 2", result.stderr)
+        self.assertEqual(result.stderr.count("capped"), 1)
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual([s["score"] for s in saved["scheduled"]], [2, 3, 1, 4])
+        self.assertEqual(saved["threads"][0]["score"], 3)               # the reviewer's numbers stay as written
+        self.assertEqual(self.topics()["clip/hw"]["next_due"], "2026-11-12")
+
+    def test_apply_caps_a_thread_without_n_by_its_position(self):
+        review = {"flags": [{"type": "bluff", "thread": 2, "text": "Claimed a cache that isn't there"}],
+                  "threads": [{"topic": "clip/seek", "score": 4}, {"topic": "clip/cache", "score": 4}]}
+        path = self.home / "sessions/2026-11-10-1200-walkthrough.json"
+        self.write("sessions/2026-11-10-1200-walkthrough.json", json.dumps(review))
+        result = self.run_raw("apply", str(path))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("capped clip/cache at 2", result.stderr)
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual([s["score"] for s in saved["scheduled"]], [4, 2])
+
+    def test_apply_dedupes_an_absolute_session_path_and_reports_previous_scores(self):
+        self.score("clip/seek", 1, "sessions/2026-11-09-0900-drill.md", day="2026-11-09")
+        review = {"threads": [{"n": 1, "topic": "clip/seek", "score": 3}]}
+        path = self.home / "sessions/2026-11-10-1200-deep-dive.json"
+        self.write("sessions/2026-11-10-1200-deep-dive.json", json.dumps(review))
+        self.run_cli("apply", str(path))
+        review.update(session=str(self.home / "sessions/2026-11-10-1200-deep-dive.md"))   # rewritten as an absolute path
+        review["threads"][0]["score"] = 2
+        self.write("sessions/2026-11-10-1200-deep-dive.json", json.dumps(review))
+        self.run_cli("apply", str(path))
+        t = self.topics()["clip/seek"]
+        self.assertEqual((len(t["history"]), t["last_score"]), (2, 3))
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["scheduled"][0]["previous_score"], 1)
+
+    def test_report_with_a_list_or_object_focus(self):
+        self.write("projects/index.json", json.dumps([{"slug": "taskly", "name": "Taskly API"}, {"slug": "clip", "name": "Clipper"}]))
+        for focus in (["taskly", "clip"], {"project": "taskly"}):
+            with self.subTest(focus):
+                self.write("sessions/2026-11-10-1200-mixed.json", json.dumps({"score": 3, "mode": "mixed", "focus": focus, "threads": []}))
+                page = Path(self.run_cli("report", str(self.home / "sessions/2026-11-10-1200-mixed.json")).strip())
+                self.assertIn("Taskly API", page.read_text(encoding="utf-8"))
+
+    def test_nudge_asks_for_a_debrief_after_the_interview(self):
+        self.target("2026-11-08")
+        self.seed("a/x")
+        self.assertEqual(json.loads(self.run_cli("nudge"))["systemMessage"],
+                         "Interviewly: How did the Acme interview go? → /interviewly:debrief")
+        self.assertEqual(self.run_cli("nudge"), "")                                # once a day
+        self.write("debriefs/2026-11-01-acme-screen.md", "x")                      # an earlier round's debrief
+        self.assertIn("How did the Acme", self.run_cli("nudge", day="2026-11-11"))
+        self.write("debriefs/2026-11-08-acme-backend-engineer-technical.md", "x")
+        (self.home / ".nudge-shown").unlink()
+        message = json.loads(self.run_cli("nudge", day="2026-11-11"))["systemMessage"]
+        self.assertNotIn("How did", message)
+        self.assertIn("new topic", message)
+        (self.home / "debriefs/2026-11-08-acme-backend-engineer-technical.md").unlink()
+        self.assertNotIn("How did", self.run_cli("nudge", day="2026-11-12"))       # only for three days
+
+    def test_a_debrief_named_after_a_two_letter_company_counts(self):
+        self.write("profile.json", json.dumps({"active_target": "platform-engineer"}))
+        self.write("targets/platform-engineer.md", "---\ncompany: HP\ninterview_date: 2026-11-09\n---\n")
+        self.seed("a/x")
+        self.assertIn("How did the HP interview go?", self.run_cli("nudge"))
+        self.write("debriefs/2026-11-09-hp-onsite.md", "x")
+        (self.home / ".nudge-shown").unlink()
+        self.assertNotIn("How did", self.run_cli("nudge"))
+
+    def test_an_abandoned_session_does_not_count_and_stamp_names_files(self):
+        self.write("sessions/2026-11-09-0900-drill.md", "---\nmode: drill\n---\n**Score:** 3/4\n")
+        self.write("sessions/2026-11-10-0900-deep-dive.md",
+                   "---\nmode: deep-dive\nstatus: in-progress\n---\n\n# Session: deep-dive on clip\n")
+        self.write("debriefs/2026-11-07-acme-screen.md", "---\nwritten: 2026-11-08\n---\n")   # practised the day after
+        info = json.loads(self.run_cli("streak", "--json"))
+        self.assertEqual((info["current"], info["practised_today"]), (2, False))
+        self.write("sessions/2026-11-10-0900-deep-dive.md",
+                   "---\nstatus: in-progress\n---\n# Session\n\n## Q1 · topic: clip/seek\n**Answer:** keyframes\n")
+        self.assertTrue(json.loads(self.run_cli("streak", "--json"))["practised_today"])
+        self.assertRegex(self.run_cli("stamp", "drill").strip(), r"^2026-11-10-\d{4}-drill$")
+        self.assertEqual(self.run_raw("stamp", "../x").returncode, 1)
+
+    # --- CV audit ---
+
+    def test_wrapped_bullet_is_one_claim_and_repeats_get_their_own_id(self):
+        cv = ("# Sam Rivera\r\nsam@example.com\r\n\r\n## Experience\r\n### Backend Developer | Brightline Media | 2024 – Present\r\n"
+              "- Led the migration of the reporting service\r\n  to Celery, cutting delivery from 6 hours to 20 minutes\r\n"
+              "- Wrote unit tests\r\n\r\n## Projects\r\n### Taskly API\r\n- Wrote unit tests\r\n")
+        claims, _ = interviewly.cv_items(cv)
+        self.assertEqual([c["text"] for c in claims], [
+            "Led the migration of the reporting service to Celery, cutting delivery from 6 hours to 20 minutes",
+            "Wrote unit tests", "Wrote unit tests"])
+        self.assertEqual(claims[2]["id"], claims[1]["id"] + "-2")
+        self.assertEqual([c["heading"] for c in claims[1:]], ["Backend Developer | Brightline Media | 2024 – Present", "Taskly API"])
+        claims, _ = interviewly.cv_items("# Sam\n\n## Experience\n- Built the API\n\n  Indented note under it\n")
+        self.assertEqual(len(claims), 2)   # after a blank line it's a paragraph of its own
+
+    @unittest.skipIf(os.name == "nt", "TZ names need POSIX")
+    def test_audit_plan_rechecks_after_a_time_zone_change(self):
+        self.write("cv.md", self.CV)
+        self.write("projects/taskly.md", "dossier")
+        london, new_york = {"TZ": "Europe/London"}, {"TZ": "America/New_York"}
+        self.assess(json.loads(self.run_raw("audit-plan", env=london).stdout), project="taskly")
+        self.assertEqual(self.run_raw("audit-merge", str(self.home / ".audit/part-1.json"), env=london).returncode, 0)
+        later = time.time() + 5
+        os.utime(self.home / "projects/taskly.md", (later, later))       # the code analysis finished just after
+        plan = json.loads(self.run_raw("audit-plan", env=new_york).stdout)   # and the user has since flown west
+        self.assertEqual({c["reason"] for c in plan["recheck"]}, {"code analysis updated"})
 
 
 if __name__ == "__main__":

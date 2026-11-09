@@ -5,6 +5,7 @@
   "years_experience": 2,
   "target_level": "mid",
   "cv_path": "__WORKSPACE__/sample-cv.md",
+  "git_identities": ["Sam Rivera", "sam@example.com"],
   "updated": "2026-11-01",
   "active_target": null,
   "skills": [

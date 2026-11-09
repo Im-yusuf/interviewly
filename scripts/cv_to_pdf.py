@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Turn a Markdown CV into a send-ready PDF that applicant tracking systems read cleanly.
 
-Uses headless Chrome (or Chromium, Edge, Brave) to print a single-column page and fixes what
-Chrome gets wrong for parsers. Where no browser can run (none installed, or a sandbox that
-blocks the local socket Chrome needs), it writes the PDF itself with pdf_render.py, from the
-same parsed CV and to the same rules:
+Writes the PDF itself with pdf_render.py, whose output reads the same in every parser we
+can check. For text that writer can't set (right-to-left or joined scripts, characters its
+font lacks) it prints the page with headless Chrome (or Chromium, Edge, Brave) instead and
+fixes what Chrome gets wrong for parsers. Both follow the same rules:
 
   - real text with embedded fonts, every character mapped to Unicode (Chrome maps the
     space in some bold fonts to a line break, which splits names and phrases in many parsers)
+  - the name and headings in the text layer exactly as typed (no forced capitals)
   - **bold** and *italic* kept where the Markdown has them, links clickable with the
-    same address as the Markdown, contact links written out in full
-  - no ligatures, and no line breaks inside hyphenated or slashed words ("auto-synced",
-    "CI/CD"), so keyword matching sees whole words
-  - tagged headings, lists and links, document title, author and language set
+    same address as the Markdown, contact links written out in full; a link to a local
+    file, localhost or a script stays plain text
+  - no ligatures, and no line breaks inside short hyphenated or slashed words
+    ("auto-synced", "CI/CD"), so keyword matching sees whole words
+  - tagged headings, lists and links, document title, author and language set, and no
+    tool name in the metadata
   - no browser header or footer, no images, no tables, no columns
   - fits the page limit: tries a slightly tighter layout before letting an entry split
     across pages, and says how much to cut if it still doesn't fit
@@ -23,9 +26,11 @@ Markdown it understands: `# Name`, header lines under it (contact details), `## 
 Bare emails and linkedin.com/github.com addresses become links.
 
 Usage: cv_to_pdf.py CV.md CV.pdf [--paper a4|letter] [--max-pages 2] [--lang en-GB] [--engine auto|chrome|builtin]
-Exit code 2 when it can't fit the page limit (the PDF is still written).
+Exit code 2 when it can't fit the page limit, and 3 when a word or link too wide for the
+line made Chrome shrink the whole page (the PDF is still written; the built-in writer never does).
 """
 import argparse
+import bisect
 import html
 import os
 import re
@@ -38,7 +43,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pdf_render  # noqa: E402
 import pdf_text  # noqa: E402
-from ats_check import is_skills_section  # noqa: E402
+from ats_check import is_skills_section, web_link  # noqa: E402
 
 BROWSERS = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -78,6 +83,10 @@ INLINE = re.compile(
     r"|(?P<site>(?<![\w/@.])(?:www\.)?(?:linkedin\.com|github\.com|gitlab\.com)/[^\s|,;()]*[^\s|,;().])"
 )
 UNBREAKABLE = re.compile(r"\S*\w[-/\u2010\u2013]\w\S*")
+NOWRAP_MAX = 40   # a longer token (a long address) may wrap; kept on one line, it makes Chrome shrink the whole page
+# Soft hyphen, zero-width space, word joiner and byte-order mark: invisible, but they split words for parsers
+HIDDEN = dict.fromkeys((0xAD, 0x200B, 0x2060, 0xFEFF))
+LANG_TAG = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*")
 
 
 def find_browser():
@@ -102,9 +111,11 @@ def esc(text):
 
 
 def plain(text):
-    """Escape text and keep hyphenated or slashed words on one line."""
+    """Escape text and keep short hyphenated or slashed words on one line."""
     out, pos = [], 0
     for m in UNBREAKABLE.finditer(text):
+        if len(m.group(0)) > NOWRAP_MAX:
+            continue
         out.append(esc(text[pos:m.start()]))
         out.append(f'<span class="nw">{esc(m.group(0))}</span>')
         pos = m.end()
@@ -113,7 +124,8 @@ def plain(text):
 
 
 def runs(text, bold=False, italic=False, url=None):
-    """Inline Markdown -> [(text, bold, italic, url)]. Bare emails and profile addresses become links."""
+    """Inline Markdown -> [(text, bold, italic, url)]. Bare emails and profile addresses become links; a link a
+    recruiter can't open (a local file, localhost, javascript:) stays plain text."""
     out, pos = [], 0
     for m in INLINE.finditer(text):
         g = m.groupdict()
@@ -124,13 +136,13 @@ def runs(text, bold=False, italic=False, url=None):
         if g["code"] is not None:
             out.append((g["code"], bold, italic, url))
         elif g["label"] is not None:
-            out += runs(g["label"], bold, italic, url or g["url"])
+            out += runs(g["label"], bold, italic, url or (g["url"] if web_link(g["url"]) else None))
         elif g["bold"] is not None:
             out += runs(g["bold"], True, italic, url)
         elif g["it1"] is not None or g["it2"] is not None:
             out += runs(g["it1"] or g["it2"], bold, True, url)
         elif g["raw"]:
-            out.append((g["raw"], bold, italic, g["raw"]))
+            out.append((g["raw"], bold, italic, g["raw"] if web_link(g["raw"]) else None))
         elif g["email"]:
             out.append((g["email"], bold, italic, "mailto:" + g["email"]))
         elif g["site"]:
@@ -144,7 +156,7 @@ def runs(text, bold=False, italic=False, url=None):
 def parse(md):
     """Markdown lines -> list of (kind, text)."""
     blocks, in_header = [], False
-    for raw in md.splitlines():
+    for raw in md.translate(HIDDEN).splitlines():
         line = raw.rstrip()
         text = line.strip()
         if not text or RULE.fullmatch(text):
@@ -206,6 +218,12 @@ def model(md):
     return out
 
 
+def nowrap(rs):
+    """A short contact item or role part, kept on one line."""
+    inner = html_runs(rs)
+    return f'<span class="nw">{inner}</span>' if len("".join(t for t, *_ in rs)) <= NOWRAP_MAX else inner
+
+
 def html_runs(rs):
     out, i = [], 0
     while i < len(rs):
@@ -247,7 +265,7 @@ def body_html(blocks):
             out.append(f"<header><h1>{html_runs(b['runs'])}</h1>")
             state["header"] = True
         elif kind == "header":
-            items = [f'<span class="nw">{html_runs(r)}</span>' for r in b["items"]]
+            items = [nowrap(r) for r in b["items"]]
             if len(items) == 1:
                 out.append(f'<p class="headline">{html_runs(b["items"][0])}</p>')
             else:
@@ -269,9 +287,11 @@ def body_html(blocks):
             if kind != "item":
                 close_list()
             if kind == "role":
+                # The date follows the role on the same line of text: set apart to the right, macOS PDFKit
+                # (Preview, Spotlight, copy and paste) reads Chrome's dates as a column after everything else
                 left = f"<strong>{html_runs(b['parts'][0])}</strong>" + "".join(
-                    f'<span class="sep"> | </span><span class="nw">{html_runs(p)}</span>' for p in b["parts"][1:])
-                right = f'<span class="date">{html_runs(b["date"])}</span>' if b["date"] else ""
+                    f'<span class="sep"> | </span>{nowrap(p)}' for p in b["parts"][1:])
+                right = f'<span class="sep"> | </span><span class="date">{html_runs(b["date"])}</span>' if b["date"] else ""
                 out.append(f'<h3><span class="what">{left}</span>{right}</h3>')
             elif kind == "sub":
                 out.append(f"<h4>{html_runs(b['runs'])}</h4>")
@@ -302,14 +322,13 @@ html {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
 body {{ margin: 0; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", "Nimbus Sans", sans-serif;
   font-size: {fs}pt; line-height: {lh}; color: #1a1a1a; background: #fff; text-align: left;
   font-variant-ligatures: none; font-feature-settings: "liga" 0, "clig" 0, "dlig" 0, "hlig" 0;
-  hyphens: manual; word-break: normal; overflow-wrap: normal; letter-spacing: 0; word-spacing: 0; }}
+  hyphens: manual; word-break: normal; overflow-wrap: anywhere; letter-spacing: 0; word-spacing: 0; }}
 header {{ text-align: center; margin-bottom: {6 * k:.1f}pt; }}
-h1 {{ margin: 0; font-size: {h1}pt; line-height: 1.15; font-weight: 700; text-transform: uppercase; }}
+h1 {{ margin: 0; font-size: {h1}pt; line-height: 1.15; font-weight: 700; }}
 header p {{ margin: {2 * k:.1f}pt 0 0; color: #444; font-size: {fs * 0.94:.2f}pt; }}
 h2 {{ margin: {9 * k:.1f}pt 0 {3 * k:.1f}pt; padding-bottom: 1.5pt; border-bottom: 1.2pt solid #1a1a1a;
-  font-size: {fs + 0.5:.1f}pt; line-height: 1.2; font-weight: 700; text-transform: uppercase; break-after: avoid; }}
-h3 {{ display: flex; justify-content: space-between; align-items: flex-end; align-items: last baseline; gap: 12pt;
-  margin: {6 * k:.1f}pt 0 {1 * k:.1f}pt; font-size: {fs}pt; font-weight: 400; break-after: avoid; }}
+  font-size: {fs + 1.5:.1f}pt; line-height: 1.2; font-weight: 700; break-after: avoid; }}
+h3 {{ margin: {6 * k:.1f}pt 0 {1 * k:.1f}pt; font-size: {fs}pt; font-weight: 400; break-after: avoid; }}
 h3 .date {{ font-weight: 700; white-space: nowrap; }}
 h4 {{ margin: {5 * k:.1f}pt 0 0; font-size: {fs}pt; font-weight: 700; break-after: avoid; }}
 section > h2 + .entry > h3, section > h2 + .entry > h4 {{ margin-top: {3 * k:.1f}pt; }}
@@ -329,20 +348,22 @@ a {{ color: inherit; text-decoration: underline; text-decoration-color: #8a8a8a;
 
 
 def cv_name(md):
-    name = re.search(r"^# (.+)$", md, re.M)
+    name = re.search(r"^# (.+)$", md.translate(HIDDEN), re.M)
     return "".join(t for t, *_ in runs(name.group(1).strip())).strip() if name else "CV"
 
 
 def build_html(md, density="standard", keep=True, paper="a4", lang="en-GB"):
     name = cv_name(md)
-    return (f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8">'
+    # The page needs nothing from outside itself, so it's allowed nothing: no scripts, no network
+    return (f'<!doctype html><html lang="{html.escape(lang, quote=True)}"><head><meta charset="utf-8">'
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">"
             f"<title>{esc(name)} CV</title><meta name=\"author\" content=\"{html.escape(name)}\">"
             f"<style>{css(density, keep, paper)}</style></head><body>{body_html(model(md))}</body></html>"), name
 
 
 # Inside another sandbox (Claude Code's, an eval runner's, a container) Chrome can't start its own,
-# so after one failed try it runs without it. That's safe here: the page is generated locally
-# and loads nothing from the network.
+# so after one failed try it runs without it. That's safe here: the page is generated locally,
+# its content policy allows no script or request, and the network is closed to the browser.
 class BrowserError(Exception):
     pass
 
@@ -358,7 +379,8 @@ def print_pdf(browser, page, out, profile):
     env = dict(os.environ, TMPDIR=str(tmp), MAC_CHROMIUM_TMPDIR=str(tmp))
     cmd = [browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
            "--disable-extensions", "--disable-background-networking", "--disable-crash-reporter",
-           "--disable-breakpad", "--hide-scrollbars", f"--user-data-dir={profile}",
+           "--disable-breakpad", "--hide-scrollbars", f"--user-data-dir={profile}", "--dns-prefetch-disable",
+           "--proxy-server=127.0.0.1:9", "--host-resolver-rules=MAP * ~NOTFOUND",
            "--no-pdf-header-footer", "--print-to-pdf-no-header", "--generate-pdf-document-outline",
            f"--print-to-pdf={out}", Path(page).as_uri()]
     for no_sandbox in ((True,) if _NEEDS_NO_SANDBOX else (False, True)):
@@ -375,24 +397,60 @@ def print_pdf(browser, page, out, profile):
     raise BrowserError("the browser couldn't start here (often a sandbox blocking the local socket it needs)")
 
 
+SPACE_SPAN = re.compile(rb"/Span\s*<<\s*/ActualText\s*\(\s\)\s*>>\s*BDC\s+"
+                        rb"((?:[-\d.]+\s+[-\d.]+\s+Td\s+)?<([0-9A-Fa-f]{4})>\s*Tj)\s+EMC")
+FONT_OP = re.compile(rb"/([^\s/<>\[\]()]+)\s+[-\d.]+\s+Tf")
+
+
+def drop_space_spans(data, spaces):
+    """The content stream without Chrome's /ActualText ( ) wrappers around space glyphs that the font's own map now
+    calls a space. They add nothing, and macOS PDFKit breaks the line at them ("Sep 2024" / "–" / "Present")."""
+    fonts = [(m.start(), m.group(1).decode("latin-1")) for m in FONT_OP.finditer(data)]
+    starts = [at for at, _ in fonts]
+
+    def unwrap(m):
+        i = bisect.bisect_right(starts, m.start()) - 1
+        return m.group(1) if i >= 0 and int(m.group(2), 16) in spaces.get(fonts[i][1], ()) else m.group(0)
+    return SPACE_SPAN.sub(unwrap, data)
+
+
 def finish(src, dst, name, lang):
-    """Fix Unicode maps that send a glyph to a control character, and set title, author and language."""
+    """Fix Unicode maps that send a glyph to a control character, drop the space wrappers that then add nothing,
+    and set title, author and language. The browser's Creator and Producer go: they name the browser, the
+    operating system and headless printing."""
     pdf = pdf_text.Pdf.open(src)
-    replace, fixed = {}, 0
+    replace, fixed, maps = {}, 0, {}
     for num, (value, _) in pdf.objects.items():
         if not (isinstance(value, dict) and value.get("Type") == "Font" and isinstance(value.get("ToUnicode"), pdf_text.Ref)):
             continue
         ref = value["ToUnicode"]
         mapping, nbytes = pdf_text.parse_cmap(pdf.stream(ref))
+        if nbytes not in (None, 2) or ref[0] in maps:
+            continue
+        maps[ref[0]] = mapping
         bad = [c for c, t in mapping.items() if any(ord(ch) < 32 or ord(ch) == 127 for ch in t)]
-        if bad and nbytes in (None, 2) and ref[0] not in replace:
+        if bad:
             for c in bad:
                 mapping[c] = " "
             replace[ref[0]] = (pdf.objects[ref[0]][0], pdf_text.tounicode_cmap(mapping))
             fixed += len(bad)
+    for page in pdf.pages():
+        spaces = {}
+        for key, ref in (pdf.get((pdf.get(page.get("Resources")) or {}).get("Font")) or {}).items():
+            font = pdf.get(ref)
+            to_unicode = font.get("ToUnicode") if isinstance(font, dict) else None
+            if isinstance(to_unicode, pdf_text.Ref) and to_unicode[0] in maps:
+                spaces[key] = {c for c, t in maps[to_unicode[0]].items() if t == " "}
+        contents = pdf.get(page.get("Contents"))
+        for ref in contents if isinstance(contents, list) else [page.get("Contents")]:
+            if isinstance(ref, pdf_text.Ref) and ref[0] not in replace:
+                data = pdf.stream(ref)
+                cleaned = drop_space_spans(data, spaces)
+                if cleaned != data:
+                    replace[ref[0]] = (pdf.objects[ref[0]][0], cleaned)
     info_ref = pdf.trailer.get("Info")
-    info = dict(pdf.get(info_ref) or {})
-    info.update({"Title": f"{name} CV", "Author": name, "Creator": "Interviewly"})
+    info = {k: v for k, v in (pdf.get(info_ref) or {}).items() if k not in ("Creator", "Producer")}
+    info.update({"Title": f"{name} CV", "Author": name})
     info_num = info_ref[0] if isinstance(info_ref, pdf_text.Ref) else max(pdf.spans) + 1
     replace[info_num] = info
     root_ref = pdf.trailer.get("Root")
@@ -460,6 +518,12 @@ def built_in(md, out, args, lang):
     return density, keep, "built-in writer"
 
 
+def shrunk(doc, density):
+    """How far the browser scaled the page down to fit a word or link wider than the line (1.0: not at all)."""
+    sizes = sorted(l.size for l in doc.lines if len(l.text) > 20)
+    return min(1.0, sizes[len(sizes) // 2] / DENSITY[density][0]) if sizes else 1.0
+
+
 def main():
     for stream in (sys.stdout, sys.stderr):   # UTF-8 whatever the console's code page
         if hasattr(stream, "reconfigure"):
@@ -471,10 +535,12 @@ def main():
     p.add_argument("--max-pages", type=int, default=2)
     p.add_argument("--lang", default=None, help="document language, e.g. en-GB (default) or en-US")
     p.add_argument("--engine", choices=("auto", "chrome", "builtin"), default="auto",
-                   help="auto (default): Chrome when it can run here, otherwise the built-in writer")
-    p.add_argument("--html", help="also save the HTML used (Chrome only), for debugging")
+                   help="auto (default): the built-in writer, or Chrome for text that writer can't set")
+    p.add_argument("--html", help="also save the HTML Chrome printed, for debugging (only when Chrome made the PDF)")
     args = p.parse_args()
     lang = args.lang or ("en-US" if args.paper == "letter" else "en-GB")
+    if not LANG_TAG.fullmatch(lang):   # it goes into the page Chrome prints and into the PDF
+        sys.exit(f"--lang must be a language tag such as en-GB or fr-FR, not {lang!r}")
     try:   # utf-8-sig: a byte-order mark would otherwise hide the "# Name" line
         md = Path(args.markdown).expanduser().read_text(encoding="utf-8-sig")
     except FileNotFoundError:
@@ -488,20 +554,23 @@ def main():
     browser = find_browser() if args.engine != "builtin" else None
     if args.engine == "chrome" and not browser:
         sys.exit("No Chrome, Chromium, Edge or Brave found. Install one, set INTERVIEWLY_BROWSER, or use --engine builtin.")
-    note = ""
+    note, font_problem = "", None
     try:
-        if browser:
-            try:
-                density, keep, engine = with_chrome(browser, md, out, args, lang)
-            except BrowserError as e:
-                if args.engine == "chrome":
-                    sys.exit(str(e))
-                note = f"note: {e}, so the built-in writer made the PDF"
-                density, keep, engine = built_in(md, out, args, lang)
+        if args.engine == "chrome":
+            density, keep, engine = with_chrome(browser, md, out, args, lang)
         else:
-            density, keep, engine = built_in(md, out, args, lang)
+            try:
+                density, keep, engine = built_in(md, out, args, lang)
+            except pdf_render.FontError as e:
+                if not browser:
+                    raise
+                font_problem = e
+                density, keep, engine = with_chrome(browser, md, out, args, lang)
+                note = f"note: {e}, so Chrome made the PDF"
     except pdf_render.FontError as e:
         sys.exit(f"{e}. Install Google Chrome (or run this outside the sandbox) so the browser can make the PDF.")
+    except BrowserError as e:
+        sys.exit(f"{font_problem}, and {e}" if font_problem else str(e))
     doc = pdf_text.Document(out)
     fill = last_page_fill(doc, density, args.paper)
     layout = density + ("" if keep else ", entries may split across pages")
@@ -512,17 +581,27 @@ def main():
           f"made with {engine}")
     if note:
         print(note)
+    if args.html and not engine.startswith("Chrome"):
+        print("note: --html saves the page Chrome prints, and the built-in writer made this PDF; "
+              "add --engine chrome to get it")
     short = short_last_lines(doc)
     if short:
         print(f"short last lines: {len(short)} ({', '.join(repr(t) for t in short[:5])}); trimming a word or two "
               f"from those paragraphs makes the page look tidier")
     if doc.text(raw=True) != doc.text():
         print("warning: some text reads differently in parsers that ignore /ActualText; run ats_check.py")
+    scale = shrunk(doc, density) if engine.startswith("Chrome") else 1.0   # the built-in writer never scales a page
+    if scale < 0.97:
+        print(f"too wide: a word or link is wider than the line, so the browser shrank the whole page to "
+              f"{round(scale * 100)}%; shorten it, or write a long link as [label](url), then build again")
     if len(doc.pages) > args.max_pages:
         words = len(re.findall(r"\w+", doc.text()))
         used = len(doc.pages) - 1 + fill
         cut = round(words * (used - args.max_pages) / used * 1.1) + 10
         print(f"too long: {len(doc.pages)} pages even at the tightest layout; cut about {cut} words")
+    if scale < 0.97:
+        sys.exit(3)
+    if len(doc.pages) > args.max_pages:
         sys.exit(2)
 
 

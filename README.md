@@ -42,7 +42,7 @@ A question bank can't get you ready for those, because they're about your projec
 
 - 💼 **Job hunting** and want practice on your own projects, not generic questions
 - ✨ **A vibe coder** who built something real with AI and now has to explain it
-- 🎓 **A student, junior or career changer** whose CV is mostly side projects
+- 🎓 **A student, junior or career changer** whose CV is mostly side projects, or who doesn't have one yet
 - 😬 **Anyone** with a line on their CV they're not sure they could defend
 
 ## How it works
@@ -83,7 +83,7 @@ You shipped it with Claude, Cursor or Copilot. It works, it's on your CV, and yo
   <tr>
     <td width="50%" valign="top">
       <h3>🎤 "Walk us through a project"</h3>
-      <p>Practise the question nearly every interview starts with: timed, followed up, scored, then retried on the spot.</p>
+      <p>Practise the question nearly every interview starts with: timed, followed up, scored, then retried on the spot. "Tell me about yourself" too, in 30 or 90 seconds.</p>
     </td>
     <td width="50%" valign="top">
       <h3>🔍 A CV that survives follow-ups</h3>
@@ -97,7 +97,7 @@ You shipped it with Claude, Cursor or Copilot. It works, it's on your CV, and yo
     </td>
     <td width="50%" valign="top">
       <h3>🔥 Five minutes a day</h3>
-      <p>Quick drills bring weak topics back before you forget them, with a streak and a readiness score to keep you going.</p>
+      <p>Quick drills bring weak topics back before you forget them, and before your interview date. A streak keeps you going, and an honest readiness score counts what you haven't practised yet.</p>
     </td>
   </tr>
 </table>
@@ -113,17 +113,20 @@ The biggest finding is that two of your CV bullets describe things the code does
 async database access in Taskly, and hardware-accelerated encoding in Clipper.
 ```
 
-Then the mock interview goes straight for them, as in the screenshot at the top. Try it yourself in Claude Code (it keeps its data in a throwaway folder):
+Then the mock interview goes straight for them, as in the screenshot at the top. Try it yourself in Claude Code, on a copy of the samples in a private throwaway folder:
 
 ```bash
-git clone https://github.com/Im-yusuf/interviewly && cd interviewly
-INTERVIEWLY_HOME=/tmp/interviewly-demo claude --plugin-dir .
+git clone https://github.com/Im-yusuf/interviewly
+plugin="$PWD/interviewly"; demo="$(mktemp -d)"
+cp -R interviewly/examples/. "$demo" && cd "$demo"
+INTERVIEWLY_HOME="$demo/home" claude --plugin-dir "$plugin"
 ```
 
 ```
-/interviewly:setup examples/sample-cv.md examples/fastapi-todo examples/ffmpeg-clipper
-/interviewly:interview
+/interviewly:start sample-cv.md fastapi-todo ffmpeg-clipper
 ```
+
+Say **skip** when it asks for a job ad and pick **Check my CV first**. Once it has read the code, run `/interviewly:interview`.
 
 ## Get started in a minute
 
@@ -162,14 +165,18 @@ git clone https://github.com/Im-yusuf/interviewly
 
 ## Honest by design
 
-- **It never makes things up about you.** Every model answer and CV line comes from your code, your CV or what you told it. Suggested wording makes a claim easier to defend, never bigger.
+- **It doesn't make things up about you.** Every model answer and CV line comes from your code, your CV or what you told it. Where a fact is missing, it leaves a gap for you to fill instead of guessing. Suggested wording makes a claim easier to defend, never bigger.
 - **It never touches your code.** It reads your projects. It doesn't edit, build or run them unless you say so.
-- **Your data stays yours.** Interviewly has no server, no account and no tracking. Your CV and code are read by the AI app you already use, and everything Interviewly saves is plain files on your machine that one command deletes.
+- **Your data stays yours.** Interviewly has no server, no account and no tracking. Your CV and code are read by the AI app you already use, and everything Interviewly saves is plain files in one private folder on your machine, [easy to delete](docs/how-it-works.md#deleting-your-data). Web searches carry only a company, a role or a technology.
+- **It reads with care.** Instructions hidden in a repo or a job ad are treated as text, not orders. No AI tool can fully rule that out, so keep your app's permission prompts on for code you didn't write.
 - **It doesn't nag.** At most one line a day, only when there's something worth practising, and you can turn it off.
 
 Curious about the details? Read [how it works](docs/how-it-works.md) and [privacy and security](SECURITY.md).
 
 ## FAQ
+
+**I don't have a CV yet.**
+Say so when it asks. It asks a few questions and writes a short CV from your answers, then `/interviewly:cv new` builds a full one from your answers and your code.
 
 **I can't share my work code. Does it still help?**
 Yes. It prepares you from your CV instead, and interviews focus on what you did, how you measured it and what your part was.
@@ -191,12 +198,12 @@ See [updating and removing](docs/how-it-works.md#updating-and-removing). Your da
 | `/interviewly:start` | Start here: job ad, CV, then likely questions or practice |
 | `/interviewly:interview` | Mock interview with a scored report card |
 | `/interviewly:larp-it <project> [file]` | Learn code you can't explain yet, in 10-minute lessons |
-| `/interviewly:walkthrough [project]` | Practise walking through a project, timed and followed up |
+| `/interviewly:walkthrough [project] \| pitch` | Practise walking through a project, or "tell me about yourself", timed and followed up |
 | `/interviewly:breakdown <project>` | A written study guide to one project |
 | `/interviewly:prep <technology>` | Common questions for one technology, tied to how you used it |
 | `/interviewly:drill` | Five-minute drill: reviews you owe plus a few new topics |
 | `/interviewly:audit` | Check every CV claim against your code |
-| `/interviewly:cv` | An honest CV rewrite for a job, as an ATS-ready PDF |
+| `/interviewly:cv [new]` | An honest CV rewrite for a job, as an ATS-ready PDF, or a first CV with `new` |
 | `/interviewly:target <job ad>` | Fit, likely questions and company research for one role |
 | `/interviewly:stories` | True STAR stories, including "how I used AI" |
 | `/interviewly:debrief` | After a real interview: better answers and the next round |

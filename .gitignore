@@ -5,3 +5,12 @@ __pycache__/
 .venv/
 .idea/
 .vscode/
+# Never commit an Interviewly home, real or copied: it holds a CV, interviews and private code.
+/state/
+/.interviewly*/
+/sessions/
+/reports/
+/tmp/
+*-CV.pdf
+# Left behind only if a build of dist/ is interrupted
+.interviewly-build-*/

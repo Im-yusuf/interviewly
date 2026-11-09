@@ -1,7 +1,7 @@
 ---
 name: interview
-description: Runs a mock interview on the user's CV, projects and technologies, one question at a time, with a scored report. Use for "interview me", "quiz me on X", "grill me" or "resume".
-argument-hint: "[project|technology] [deep-dive|fundamentals|behavioral|system-design|claims|mixed] [persona] [level] [N]"
+description: Mock interview on the user's projects and CV, one question at a time, scored. Use for "interview me", "quiz me on X" or "grill me".
+argument-hint: "[project|technology] [deep-dive|fundamentals|behavioral|system-design|claims|mixed] [persona] [level] [N] | resume"
 ---
 
 # Mock interview
@@ -12,20 +12,20 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. The file formats and the helper script `iv` are described in `${CLAUDE_PLUGIN_ROOT}/references/state-schema.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md).
+1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md). Read only the parts of `state-schema.md` you need, the host rules, the helper script `iv`, settings and session files: `sed -n '/^## Running in any host/,/^## Layout/p;/^## config.json/,/^### Review JSON/p' "${CLAUDE_PLUGIN_ROOT}/references/state-schema.md"`.
 2. **Quick mode** (the arguments include `quick`; the start skill sends this while setup runs in the background): don't wait for setup or ask for anything. Work from the CV and job description in this conversation, plus whatever already exists in `HOME_DIR`. If a project's code was given and there's no dossier yet, read its key files yourself as you go.
-   Otherwise, if `HOME_DIR/profile.json` doesn't exist, say Interviewly needs a one-off setup first and run the `interviewly:setup` skill. Continue once it finishes.
+   Otherwise, if `HOME_DIR/profile.json` doesn't exist, run the `interviewly:start` skill instead, telling it the user wants a practice interview (and these arguments). Start gets them practising within a minute and builds the profile in the background.
 3. Read: `profile.json`, `config.json`, `projects/index.json`, `targets/<active_target>.md` if one is set, plus the mode-specific files listed in step 2. Don't read `topics.json` itself: `iv due` (step 2) gives you the topics you need, and `grep -o '"id": "[^"]*"' HOME_DIR/topics.json` lists every existing id if you want to reuse one.
-4. Read `${CLAUDE_PLUGIN_ROOT}/references/personas.md` and `${CLAUDE_PLUGIN_ROOT}/references/follow-up-ladder.md`.
-5. **Resume:** if the arguments say `resume` or `continue`, find the newest file in `HOME_DIR/sessions/` with `status: paused` or `in-progress`, read it, and pick up from the next unasked question. Skip step 1.
+4. Read `${CLAUDE_PLUGIN_ROOT}/references/personas.md` and `${CLAUDE_PLUGIN_ROOT}/references/follow-up-ladder.md`, plus `${CLAUDE_PLUGIN_ROOT}/references/rubric.md` when the feedback is coach (`each`).
+5. **Resume:** `resume` or `continue` in the arguments means a paused interview. (If the user means their résumé, the CV, run the `interviewly:audit` or `interviewly:cv` skill instead.) Find the newest interview session in `HOME_DIR/sessions/` with `status: paused` or `in-progress`: its `mode` is deep-dive, fundamentals, behavioral, system-design, claims or mixed, never a drill, lesson or walkthrough. Read it and pick up with the next unasked topic in its `plan` (plan again only if it has none). Skip step 1.
 
 ## 1. Settings
 
 Take settings from the arguments first:
-- A project slug or name, or a skill name → `focus`
+- A project or a skill, by slug or name → `focus`. Match it case-insensitively against the `slug` and `name` of each project in `projects/index.json` and each skill in `profile.json`, and use the slug from then on, in file paths, `--match` and the frontmatter ("Taskly" → `fastapi-todo`).
 - `deep-dive`, `fundamentals`, `behavioral`, `system-design`, `claims`, `mixed` → `mode`
-- `recruiter`, `hiring-manager` or `manager`, `senior`, `bar-raiser` or `tough`, `system-design` → `persona` (`manager` = hiring-manager, `tough` = bar-raiser)
-- `junior`, `mid`, `senior`, `staff` → `difficulty`. Without one, use `profile.target_level`.
+- `recruiter`, `hiring-manager` or `manager`, `senior engineer`, `bar-raiser` or `tough`, `system-design` → `persona` (`manager` = hiring-manager, `tough` = bar-raiser)
+- `intern`, `junior`, `mid`, `senior`, `staff` → `difficulty`. (`senior` alone sets the level; the senior engineer is the default persona anyway.) Without one, use the active target's `level`, mapped onto these five as `personas.md` describes, else `profile.target_level`.
 - A number → `length` (number of main questions)
 - `coach` → `feedback: each`; `realistic` → `feedback: end`
 - `again` or `same` → reuse `config.last_interview` as it is.
@@ -46,45 +46,49 @@ Save the final settings to `config.json` as `last_interview`.
 
 ## 2. Plan the questions (don't show the plan)
 
-Plan `length` main questions, each with a topic id (`<project-or-skill>/<topic-slug>`) and a starting rung on the ladder. Where questions come from depends on the mode. Paths starting `references/` are in `${CLAUDE_PLUGIN_ROOT}`; everything else is in `HOME_DIR`.
+Plan `length` main questions, each with a topic id (`<project-or-skill>/<topic-slug>`) and a starting rung on the ladder. (System design is one thread, so `length` doesn't apply.) Where questions come from depends on the mode. Paths starting `references/` are in `${CLAUDE_PLUGIN_ROOT}`; everything else is in `HOME_DIR`.
 
 | Mode | Read | Questions come from |
 |---|---|---|
 | deep-dive | `projects/<focus>.md` | Its **Probe points**, **Weak spots** and **Decisions and trade-offs**, plus that project's topics from `iv due` and its CV claims |
 | fundamentals | `references/question-patterns.md`, the dossiers that use the skill | The skill's category patterns at the user's level, each paired with "and how did you use it in <project>?" |
 | behavioral | `stories.md` (if it exists), `references/question-patterns.md` (behavioral table) | Common behavioral questions; prefer categories that have a story, and include one category that doesn't |
-| system-design | the focus project's dossier | A single design prompt that grows the user's own project (scale it up, add a feature, add a failure), run as one long thread |
+| system-design | the focus project's dossier | A single design prompt that grows the user's own project, scoped to their level and stack, run as one thread through the stages in `personas.md` (about 6–8 interviewer turns) |
 | claims | `audit.md` (if it exists) or `profile.claims` | High-risk claims first (only the audit rates risk; without it, start with metric and leadership claims). Each thread checks one claim: what, how measured, your part, what-if |
-| mixed | all of the above | An opener, 2 deep-dive, 1–2 fundamentals, 1 behavioral, 1 claim |
+| mixed | the files above, with the dossiers read as below | An opener ("Tell me about yourself", topic `profile/tell-me-about-yourself`), 2 deep-dive, 1–2 fundamentals, 1 behavioral, 1 claim |
 
-**AI-built projects.** If the focus project's dossier has **How it was built** with a large AI share, the hiring-manager and bar-raiser interviewers ask one question from the `ai-assisted` patterns in `question-patterns.md` (once per session, never as the opener), and one deep-dive thread goes into a high **Explain-risk** component.
+In mixed mode, read the dossier of the project that matters most in full, and only the **Weak spots** and **Probe points** of the others: `awk '/^## /{p=/^## (Weak spots|Probe points)$/} p' "<dossier>"`.
+
+**AI questions.** Interviewers now ask almost everyone how they use AI tools. Every mixed and behavioral session asks it once, never as the opener: one question from the **For everyone** list in the `ai-assisted` patterns of `question-patterns.md`, as its own thread in behavioral mode or as a follow-up in a deep-dive thread in mixed mode. If the focus project's **How it was built** shows a large AI share (an `unknown` share isn't large), the hiring-manager and bar-raiser also ask one authorship question from that section's second list, and one deep-dive thread goes into a high **Explain-risk** component.
 
 Weighting:
 - An active target's requirements count double.
-- Topics from `iv due --json` go first. It lists the reviews due (`kind: review`, weakest first), then today's new topics (`kind: new`). With a focus, add `--match <focus>`. In mixed mode, or with no single focus, leave `--match` out.
+- Topics from `iv due --json` go first. It lists the reviews due (`kind: review`, weakest first), then today's new topics (`kind: new`). With a focus, add `--match "<focus slug>"` (the slug, never the user's words). In mixed mode, or with no single focus, leave `--match` out.
 - Skip questions asked in the last two sessions (check the `## Q` lines in recent files in `sessions/`) unless they scored 2 or less, because those are worth retrying.
 - Start with an opener at the *what* rung, then go harder. Save the hardest thread for second to last, not last.
 
 ## 3. Create the session file
 
-`HOME_DIR/sessions/<YYYY-MM-DD-HHMM>-<mode>.md` with the frontmatter from `state-schema.md` and `status: in-progress`. **After every user answer**, append the exchange: the question as you asked it, the user's answer word for word, follow-ups, and hint and skip counts. Use the Edit tool, or `cat >>` with a quoted heredoc. Write it as you go, never only at the end.
+`HOME_DIR/sessions/<YYYY-MM-DD-HHMM>-<mode>.md` (the name from `iv stamp <mode>`) with the frontmatter from `state-schema.md`, `status: in-progress` and `plan: [<the planned topic ids, in order>]` (ids only, so a resume picks up without showing the questions). **After every user answer**, append the exchange: the question as you asked it, the user's answer word for word, follow-ups, and hint and skip counts. Use your file edit tool, never `cat >>` or a heredoc: answers are free text. Write it as you go, never only at the end.
 
 ## 4. Run the interview
 
-Open in character, in two or three sentences: who you are, the role, and what this session covers. Then once, in brackets: *(commands: `hint` · `skip` · `feedback` · `pause` · `end`)*.
+Open in character, in two or three sentences: who you are, the role, and what this session covers. Then once, in brackets: *(Answer as you'd say it out loud: dictate it if you can, and aim for about 2 minutes on the bigger questions. Commands: `hint` · `skip` · `feedback` · `settings` · `pause` · `end`)*.
 
 For each thread:
 
 1. **Ask exactly one question, then end your turn and wait.** One question means one question mark: no multi-part questions, no lists, no "and also…". If you want to know two things, ask the more important one now and save the other for a follow-up.
 2. When the answer comes, log it, then choose the next move using `follow-up-ladder.md`:
    - Check the **triggers** first (vague answers, buzzwords, numbers, "we", contradictions with the code).
-   - Then climb, stay on the rung or move on, as the ladder describes. Maximum 3 follow-ups per thread; the persona decides how hard to push.
+   - Then climb, stay on the rung or move on, as the ladder describes. Maximum 3 follow-ups per thread (system design runs longer; see `personas.md`); the persona decides how hard to push.
 3. Stay in character:
    - Brief, neutral acknowledgements. No praise inflation, no teaching, no model answers.
    - If the user states something technically wrong, don't correct it in realistic mode: probe it ("What would happen if…?") and leave the verdict to the review.
    - If what they say contradicts the dossier, ask the way an interviewer who read their GitHub would: "Interesting. I thought the routes were sync?"
    - Use details from their code in your questions. ("In `cut_clip` you put `-ss` before `-i`…") That's what makes this better than generic practice.
-4. **Coach mode only** (`feedback: each`): after each thread, step out of character for three lines and no more: `Score ≈ n/4` · what landed · the one thing to add (with a file reference). Then go back into character for the next question.
+4. **Coach mode only** (`feedback: each`): after each thread, step out of character for four lines and no more: `Score ≈ n/4` (by `rubric.md`, caps included) · what landed · the one thing to add (with a file reference) · **Say it like this:** one first-person sentence that adds it. Then go back into character for the next question.
+
+**Coach feedback and mini-lessons never invent facts.** Use only the dossier, the code, the CV and what the user said. A fact you don't have is a bracketed gap, as the rubric's **Writing feedback** describes, never a plausible guess.
 
 Commands at any point:
 - `hint`: give the next hint from the ladder (area → concept → partial answer) and log it.
@@ -101,12 +105,12 @@ A skip or a dead end should teach something, not just move on.
 
 - **Coach mode:** step out of character and give a **mini-lesson** about the *one* point they most needed, in under 8 lines, leaving everything else out:
   1. **The key idea:** one or two sentences, with a file reference when there is one.
-  2. **How a strong answer sounds:** two or three sentences, first person, in quotes.
+  2. **How a strong answer sounds:** two or three sentences, first person, in quotes, with gaps in brackets for anything you don't know.
   3. **Retry:** one short, easier question on that same point, answerable in a few words, with a single question mark ("Try this: when the reminder task runs, has the 201 already been sent?"). End your turn and wait.
   Log it in the session file as `**Skipped:** yes · **Lesson:** given · **Retry answer:** …`. Then move on to the next thread, back in character.
 - **Realistic mode:** stay in character and move on. But after **two skips in a row**, or two skips in the first three questions, step out once and ask with options: **Switch to coach mode** (I'll teach each point as we go) · **Keep it realistic** · **End and get my review**. Switching keeps the session going in coach mode from the next question.
 
-When all threads are done, close in character with one line, then: "Do you have any questions for me?" Whatever they ask, answer briefly in character. Then give them, out of character, two strong questions they could ask in a real interview for this kind of role.
+When all threads are done, close in character with one line, then: "Do you have any questions for me?" Whatever they ask, answer briefly in character. Then give them, out of character, two strong questions they could ask in a real interview for this kind of role (from the target file's questions to ask them, if it has any).
 
 ## 5. Review
 
@@ -119,5 +123,5 @@ When all threads are done, close in character with one line, then: "Do you have 
    - The top 3 things to fix
    - Model answers for the two weakest threads, quoted
    - How many topics were scheduled for review, and when
-4. Give the path of the visual report card the reviewer returned, and offer two things: to open it in the browser (`iv report <session.json> --open`), and to make a 1200×630 image of the result to share (`iv share <session.json>`).
+4. Give the path of the visual report card the reviewer returned, and offer two things: to open it in the browser (`iv report "<HOME_DIR>/sessions/<name>.json" --open`), and to make a 1200×630 image of the result to share (`iv share "<HOME_DIR>/sessions/<name>.json"`). Before they post the image, say what it shows: the mode, score, label, streak and dimension bars, plus the project name only when setup recorded that repo as public on GitHub. It never shows the fixes or anything they said.
 5. Suggest one next step: `/interviewly:drill` tomorrow if many topics were scheduled; `/interviewly:breakdown <project>` if a project's threads scored ≤ 2; `/interviewly:prep <skill>` if a technology's fundamentals were weak; or the same mode at a higher level or with the bar-raiser if the session score was ≥ 3.5.

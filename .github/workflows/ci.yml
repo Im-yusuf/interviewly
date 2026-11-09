@@ -2,23 +2,86 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    name: test (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    # Windows is untested so far: its results show, but don't fail the run yet.
+    continue-on-error: ${{ startsWith(matrix.os, 'windows') }}
     strategy:
+      fail-fast: false
       matrix:
-        python: ["3.8", "3.12"]
+        os: [ubuntu-22.04, macos-latest]
+        python: ["3.8", "3.12", "3.14"]
+        exclude:
+          - os: macos-latest   # no Python 3.8 build for Apple silicon runners
+            python: "3.8"
+        include:
+          - os: windows-latest
+            python: "3.8"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Unit tests (includes a check that dist/antigravity is up to date)
-        run: python3 -m unittest discover tests
+      - name: PDF tools are present, so the PDF tests run instead of skipping
+        if: ${{ !startsWith(matrix.os, 'windows') }}
+        run: |
+          python -c "import sys; sys.path[:0] = ['scripts', 'tests']; import cv_to_pdf, test_cv_to_pdf; sys.exit(0 if cv_to_pdf.find_browser() and test_cv_to_pdf.fonts_available() else 'no browser or no fonts: the PDF tests would be skipped')"
+      - name: Unit tests (dist/antigravity up to date, manifests agree, no personal data)
+        run: python -m unittest discover tests
       - name: JSON manifests parse
+        shell: bash
         run: |
           for f in .claude-plugin/*.json .codex-plugin/plugin.json hooks/hooks.json dist/antigravity/interviewly/plugin.json; do
-            python3 -m json.tool "$f" > /dev/null
+            python -m json.tool "$f" > /dev/null
+          done
+
+  eval-scaffolds:
+    name: eval scaffolds
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Eval prompts and graders have valid YAML frontmatter
+        run: |
+          ruby -ryaml -e '
+            bad = 0
+            Dir.glob("evals/*/{prompt.md,graders/*.md}").sort.each do |f|
+              head = File.read(f, encoding: "UTF-8")[/\A---\n(.*?)\n---/m, 1]
+              data = begin
+                head && YAML.safe_load(head)
+              rescue Psych::SyntaxError => e
+                e.message
+              end
+              key = f.include?("/graders/") ? "type" : "description"
+              next if data.is_a?(Hash) && data[key]
+              warn "#{f}: no valid frontmatter with `#{key}` (#{data.inspect})"
+              bad += 1
+            end
+            exit(bad.zero? ? 0 : 1)'
+      - name: Every eval scaffold runs and leaves a valid Interviewly home
+        run: |
+          for case in evals/*/; do
+            [ -f "${case}scaffold.sh" ] || continue
+            name="$(basename "$case")"
+            [ "$(sed -n 's/^name: //p' "${case}case.yaml")" = "$name" ] || { echo "$name: case.yaml name doesn't match the folder"; exit 1; }
+            ws="$(mktemp -d)"; mkdir "$ws/home"
+            (cd "$ws" && HOME="$ws/home" GIT_CONFIG_NOSYSTEM=1 bash "$GITHUB_WORKSPACE/${case}scaffold.sh")
+            if [ -d "$ws/state" ]; then INTERVIEWLY_HOME="$ws/state" python scripts/interviewly.py check; fi
+            echo "ok: $name"
           done

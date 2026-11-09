@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Prints {"systemMessage": "..."} when there's something to practise (at most once a day), and nothing otherwise.
+# Prints {"systemMessage": "..."} when there's something to practise or an interview to debrief (at most once a day),
+# and nothing otherwise.
 # A systemMessage is shown to the user only, so Claude never sees it. Turn off: /interviewly:setup reminder off
 # Nothing set up yet: stay silent without even starting Python.
 [ -f "${INTERVIEWLY_HOME:-$HOME/.interviewly}/profile.json" ] || exit 0

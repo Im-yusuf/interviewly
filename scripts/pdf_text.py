@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Read a PDF the way a CV parser does, using only the standard library.
 
-Gives the text as lines in reading order (with font size, bold and italic), the
-clickable links and the text they sit on, the fonts (embedded or not, with or without
-a Unicode map), the document info and whether the PDF is tagged. Glyphs are decoded
-twice: once honouring /ActualText (as Acrobat does) and once without it (as many
-parsers do), so text that only reads correctly in some parsers can be caught.
+Gives the text as lines (with font size, bold and italic), the clickable links and the
+text they sit on, the fonts (embedded or not, with or without a Unicode map), the
+document info and whether the PDF is tagged. Glyphs are decoded twice: once honouring
+/ActualText (as Acrobat does) and once without it (as many parsers do), so text that
+only reads correctly in some parsers can be caught. Document.lines reads straight across
+the page, as many ATS do; --markdown reads two columns that flow apart (a sidebar) one
+after the other. A file that would take too much memory or time stops with TooComplex.
 
 It can also rewrite simple PDFs (one classic xref table, no object streams, which is
 what Chrome writes); cv_to_pdf.py uses that to fix metadata and Unicode maps.
@@ -17,8 +19,26 @@ import json
 import math
 import re
 import sys
+import unicodedata
 import zlib
 from pathlib import Path
+
+# Limits that keep a crafted file from taking all the memory or time. A real CV is far below each.
+MAX_STREAM = 32 << 20      # bytes one stream may unpack to (a CV's largest is a few hundred KB)
+MAX_UNPACKED = 128 << 20   # bytes all of a PDF's streams may unpack to
+MAX_CONTENT = 16 << 20     # bytes of drawing instructions a PDF may take to draw (forms count each time they're drawn)
+MAX_GLYPHS = 300000        # characters a PDF may draw (a CV page draws a few thousand)
+MAX_DEPTH = 64             # arrays and dictionaries inside each other
+
+
+class TooComplex(Exception):
+    """The PDF would take too much memory or time to read: a damaged or deliberately crafted file."""
+
+
+class TooDeep(ValueError):
+    def __init__(self, pos):
+        super().__init__("arrays or dictionaries nested too deep")
+        self.pos = pos
 
 
 class Name(str):
@@ -114,8 +134,10 @@ def name_of(raw):
     return Name(re.sub(rb"#([0-9A-Fa-f]{2})", lambda m: bytes([int(m.group(1), 16)]), raw[1:]).decode("latin-1"))
 
 
-def parse_value(data, i):
+def parse_value(data, i, depth=0):
     """Parse one PDF object starting at i. Returns (value, end)."""
+    if depth > MAX_DEPTH:
+        raise TooDeep(i)
     gen = tokens(data, i)
     kind, raw, end = next(gen)
     if kind == "num":
@@ -143,10 +165,10 @@ def parse_value(data, i):
             if not m or m.lastgroup == "dclose":
                 return out, (m.end() if m else pos)
             if m.lastgroup != "name":  # malformed: skip a token
-                _, pos = parse_value(data, pos)
+                _, pos = parse_value(data, pos, depth + 1)
                 continue
             key = name_of(m.group(0))
-            out[key], pos = parse_value(data, m.end())
+            out[key], pos = parse_value(data, m.end(), depth + 1)
     if kind == "aopen":
         out, pos = [], end
         while True:
@@ -156,7 +178,7 @@ def parse_value(data, i):
                 m = TOKEN.match(data, pos)
             if not m or m.lastgroup == "aclose":
                 return out, (m.end() if m else pos)
-            value, pos = parse_value(data, pos)
+            value, pos = parse_value(data, pos, depth + 1)
             out.append(value)
     if kind == "kw":
         word = raw.decode("latin-1")
@@ -176,8 +198,13 @@ def pdf_text_string(raw):
 # ---------- filters ----------
 
 def png_unpredict(data, columns, colors=1, bpc=8):
+    columns, colors, bpc = int(columns), int(colors), int(bpc)
     bpp = max(1, colors * bpc // 8)
     row_len = (columns * colors * bpc + 7) // 8
+    if not 0 < row_len <= len(data):
+        raise ValueError("bad predictor")
+    if len(data) > 8 << 20:   # this loop is slow in Python; the streams it's for (cross-reference tables) are small
+        raise TooComplex("a stream with a predictor is too large to unpack")
     out, prev = bytearray(), bytearray(row_len)
     for r in range(0, len(data), row_len + 1):
         ftype, row = data[r], bytearray(data[r + 1:r + 1 + row_len])
@@ -207,10 +234,10 @@ def decode_stream(raw, d):
     parms = parms if isinstance(parms, list) else [parms] * max(1, len(filters))
     for f, p in zip(filters, parms + [None] * len(filters)):
         if f in ("FlateDecode", "Fl"):
-            try:
-                raw = zlib.decompress(raw)
-            except zlib.error:
-                raw = zlib.decompressobj().decompress(raw)
+            z = zlib.decompressobj()   # also reads a stream whose end is cut off
+            raw = z.decompress(raw, MAX_STREAM)
+            if z.unconsumed_tail or len(raw) >= MAX_STREAM:
+                raise TooComplex(f"a stream unpacks to more than {MAX_STREAM >> 20} MB")
             if isinstance(p, dict) and p.get("Predictor", 1) >= 10:
                 raw = png_unpredict(raw, p.get("Columns", 1), p.get("Colors", 1), p.get("BitsPerComponent", 8))
         elif f in ("ASCIIHexDecode", "AHx"):
@@ -234,6 +261,8 @@ class Pdf:
         self.trailer = {}
         self.has_object_streams = False
         self._lengths = None   # (num, gen) -> integer value, for streams whose /Length is a reference
+        self.unpacked = self.drawn = self.glyphs = 0   # against MAX_UNPACKED, MAX_CONTENT and MAX_GLYPHS
+        self.font_cache = {}   # a font used on many pages is read once
         self._scan()
 
     @classmethod
@@ -241,7 +270,9 @@ class Pdf:
         return cls(Path(path).read_bytes())
 
     def _scan(self):
-        data, pos = self.data, 0
+        """Find every object. When an incremental update saved an object again, the copy later in the file
+        wins, whether it's a top-level object or inside an object stream. So do the later trailers."""
+        data, pos, trailers = self.data, 0, []
         while True:
             m = OBJ_HEAD.search(data, pos)
             if not m:
@@ -270,31 +301,37 @@ class Pdf:
                 self.objects[num] = (value, stream)
                 self.spans[num] = (m.start(), end)
                 if isinstance(value, dict) and value.get("Type") == "XRef":
-                    self.trailer.update({k: v for k, v in value.items() if k in TRAILER_KEYS})
+                    trailers.append((m.start(), value))
                 pos = max(end, m.end())
             except (StopIteration, ValueError, IndexError, RecursionError):
                 pos = m.end()
         for m in re.finditer(rb"trailer[\x00\t\n\x0c\r ]*<<", data):
             try:
-                value, _ = parse_value(data, m.end() - 2)
-                self.trailer.update({k: v for k, v in value.items() if k in TRAILER_KEYS})
-            except (StopIteration, ValueError, IndexError):
+                trailers.append((m.start(), parse_value(data, m.end() - 2)[0]))
+            except (StopIteration, ValueError, IndexError, RecursionError):
                 pass
-        for num, (value, stream) in list(self.objects.items()):
-            if isinstance(value, dict) and value.get("Type") == "ObjStm" and stream is not None:
-                self.has_object_streams = True
-                try:
-                    body = decode_stream(stream, value)
-                except (ValueError, zlib.error):
-                    continue
-                first, n = value.get("First", 0), value.get("N", 0)
+        for _, value in sorted(trailers, key=lambda t: t[0]):
+            if isinstance(value, dict):
+                self.trailer.update({k: v for k, v in value.items() if k in TRAILER_KEYS})
+        where = {num: span[0] for num, span in self.spans.items()}   # where each object's current copy starts
+        streams = sorted(((self.spans[num][0], value, stream) for num, (value, stream) in self.objects.items()
+                          if isinstance(value, dict) and value.get("Type") == "ObjStm" and stream is not None),
+                         key=lambda s: s[0])
+        for start, value, stream in streams:
+            self.has_object_streams = True
+            try:
+                body = self._unpack(decode_stream(stream, value))
+                first, n = int(value.get("First", 0)), int(value.get("N", 0))
                 head = [int(x) for x in body[:first].split()[:2 * n]]
-                for k in range(0, len(head) - 1, 2):
-                    if head[k] not in self.objects:
-                        try:
-                            self.objects[head[k]] = (parse_value(body, first + head[k + 1])[0], None)
-                        except (StopIteration, ValueError, IndexError):
-                            pass
+            except (ValueError, TypeError, zlib.error):
+                continue
+            for k in range(0, len(head) - 1, 2):
+                if where.get(head[k], -1) < start:
+                    try:
+                        self.objects[head[k]] = (parse_value(body, first + head[k + 1])[0], None)
+                        where[head[k]] = start
+                    except (StopIteration, ValueError, IndexError, RecursionError):
+                        pass
         if "Root" not in self.trailer:
             for num, (value, _) in self.objects.items():
                 if isinstance(value, dict) and value.get("Type") == "Catalog":
@@ -324,9 +361,15 @@ class Pdf:
         if raw is None:
             return b""
         try:
-            return decode_stream(raw, {k: self.get(v) for k, v in d.items()})
-        except (ValueError, zlib.error):
+            return self._unpack(decode_stream(raw, {k: self.get(v) for k, v in d.items()}))
+        except (ValueError, TypeError, zlib.error):
             return b""
+
+    def _unpack(self, data):
+        self.unpacked += len(data)
+        if self.unpacked > MAX_UNPACKED:
+            raise TooComplex(f"its streams unpack to more than {MAX_UNPACKED >> 20} MB")
+        return data
 
     @property
     def root(self):
@@ -366,9 +409,12 @@ class Pdf:
                 listed |= {a[0] for a in (self.get(value.get("Annots")) or []) if isinstance(a, Ref)}
         parents = {}
         tree = self.get((self.get(self.root.get("StructTreeRoot")) or {}).get("ParentTree"))
-        stack = [tree] if isinstance(tree, dict) else []
+        stack, seen = ([tree] if isinstance(tree, dict) else []), set()
         while stack:
             node = stack.pop()
+            if id(node) in seen:   # a tree that loops back on itself
+                continue
+            seen.add(id(node))
             nums = self.get(node.get("Nums")) or []
             parents.update({nums[i]: nums[i + 1] for i in range(0, len(nums) - 1, 2)})
             stack += [self.get(k) for k in self.get(node.get("Kids")) or [] if isinstance(self.get(k), dict)]
@@ -412,7 +458,21 @@ GLYPH_NAMES = {
     "oacute": "\u00f3", "uacute": "\u00fa", "iacute": "\u00ed", "ntilde": "\u00f1", "ccedilla": "\u00e7",
     "udieresis": "\u00fc", "odieresis": "\u00f6", "adieresis": "\u00e4", "sterling": "\u00a3",
     "Euro": "\u20ac", "arrowright": "\u2192",
+    # letters and marks whose names can't be worked out from Unicode's (common in LaTeX fonts)
+    "germandbls": "\u00df", "dotlessi": "\u0131", "dotlessj": "\u0237", "ae": "\u00e6", "AE": "\u00c6",
+    "oe": "\u0153", "OE": "\u0152", "thorn": "\u00fe", "Thorn": "\u00de", "eth": "\u00f0", "Eth": "\u00d0",
+    "dcroat": "\u0111", "Dcroat": "\u0110", "quotesinglbase": "\u201a", "quotedblbase": "\u201e",
+    "guillemotleft": "\u00ab", "guillemotright": "\u00bb", "guilsinglleft": "\u2039", "guilsinglright": "\u203a",
+    "exclamdown": "\u00a1", "questiondown": "\u00bf", "section": "\u00a7", "paragraph": "\u00b6",
+    "dagger": "\u2020", "daggerdbl": "\u2021", "multiply": "\u00d7", "divide": "\u00f7", "plusminus": "\u00b1",
+    "perthousand": "\u2030", "visiblespace": "\u2423", "compwordmark": "",
 }
+# Accent names in glyph names ("Eacute", "scommaaccent") and in Unicode's letter names
+ACCENTS = {"acute": ("ACUTE",), "grave": ("GRAVE",), "circumflex": ("CIRCUMFLEX",), "dieresis": ("DIAERESIS",),
+           "tilde": ("TILDE",), "cedilla": ("CEDILLA",), "caron": ("CARON",), "breve": ("BREVE",),
+           "ring": ("RING ABOVE",), "macron": ("MACRON",), "ogonek": ("OGONEK",), "dotaccent": ("DOT ABOVE",),
+           "hungarumlaut": ("DOUBLE ACUTE",), "slash": ("STROKE",),
+           "commaaccent": ("COMMA BELOW", "CEDILLA")}   # Unicode calls the comma under G, K, L, N and R a cedilla
 
 
 def glyph_to_text(name):
@@ -424,8 +484,18 @@ def glyph_to_text(name):
     if m:
         return "".join(chr(int(name[i:i + 4], 16)) for i in range(3, len(name), 4))
     m = re.fullmatch(r"u([0-9A-Fa-f]{4,6})", name)
-    if m:
+    if m and int(m.group(1), 16) < 0x110000:
         return chr(int(m.group(1), 16))
+    m = re.fullmatch(r"([A-Za-z])(%s)" % "|".join(ACCENTS), name)
+    names = [f"LATIN {'CAPITAL' if m.group(1).isupper() else 'SMALL'} LETTER {m.group(1).upper()} WITH {mark}"
+             for mark in ACCENTS[m.group(2)]] if m else []
+    if name.isalpha():   # Gamma, alpha, ...
+        names.append(f"GREEK {'CAPITAL' if name[0].isupper() else 'SMALL'} LETTER {name.upper()}")
+    for full in names:
+        try:
+            return unicodedata.lookup(full)
+        except KeyError:
+            pass
     base = name.split(".")[0].split("_")[0]
     return glyph_to_text(base) if base != name and base else ""
 
@@ -443,11 +513,15 @@ def parse_cmap(data):
     for block in re.finditer(rb"beginbfchar(.*?)endbfchar", data, re.S):
         for src, dst in re.findall(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]*)>", block.group(1)):
             mapping[int(src, 16)] = utf16_hex(dst)
+    entries = 0
     for block in re.finditer(rb"beginbfrange(.*?)endbfrange", data, re.S):
         for lo, hi, dst in re.findall(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*(<[0-9A-Fa-f]*>|\[[^\]]*\])", block.group(1)):
             lo, hi = int(lo, 16), int(hi, 16)
             if hi - lo > 0xFFFF:
                 continue
+            entries += max(0, hi - lo + 1)
+            if entries > 0x20000:   # two-byte codes need at most 0x10000
+                raise TooComplex("a font's character map is too large")
             if dst.startswith(b"["):
                 for k, item in enumerate(re.findall(rb"<([0-9A-Fa-f]*)>", dst)):
                     mapping[lo + k] = utf16_hex(item)
@@ -459,6 +533,22 @@ def parse_cmap(data):
                     mapping[lo + k] = utf16_hex(b"%0*X" % (width, base + k))
     space = re.search(rb"begincodespacerange\s*<([0-9A-Fa-f]+)>", data)
     return mapping, (len(space.group(1)) // 2 if space else None)
+
+
+def builtin_encoding(pdf, ref):
+    """{code: text} from the encoding inside a Type 1 font program (its "dup 12 /fi put" lines), for a font
+    the PDF gives no /Encoding. Only the clear-text part (the first Length1 bytes) holds them."""
+    if not (isinstance(ref, Ref) and isinstance(pdf.get(ref), dict)):
+        return {}
+    data, length = pdf.stream(ref), pdf.get(pdf.get(ref).get("Length1"))
+    data = data[:length] if isinstance(length, int) and length > 0 else data.split(b"eexec")[0]
+    out = {}
+    for code, name in re.findall(rb"dup[\x00\t\n\x0c\r ]+(\d{1,3})[\x00\t\n\x0c\r ]*/([^\x00\t\n\x0c\r ()<>\[\]{}/%]+)"
+                                 rb"[\x00\t\n\x0c\r ]+put", data):
+        text = glyph_to_text(name.decode("latin-1"))
+        if text and int(code) < 256:
+            out[int(code)] = text
+    return out
 
 
 class Font:
@@ -505,7 +595,7 @@ class Font:
                         self.widths[first + k] = pdf.get(width)
                     i += 2
                 elif i + 2 < len(w):
-                    for c in range(int(first), int(nxt) + 1):
+                    for c in range(int(first), min(int(nxt), int(first) + 0xFFFF) + 1):
                         self.widths[c] = pdf.get(w[i + 2])
                     i += 3
                 else:
@@ -517,6 +607,8 @@ class Font:
             self.default_width = fd.get("MissingWidth", 500)
         self.encoding = {}
         enc = pdf.get(d.get("Encoding"))
+        if enc is None and self.subtype == "Type1" and "FontFile" in fd:
+            self.encoding = builtin_encoding(pdf, fd["FontFile"])   # pdfTeX's Computer Modern fonts, for one
         base_enc = enc.get("BaseEncoding") if isinstance(enc, dict) else enc
         self.codec = {"MacRomanEncoding": "mac_roman"}.get(str(base_enc), "cp1252")
         if isinstance(enc, dict):
@@ -590,10 +682,15 @@ def operations(data):
             continue
         try:
             value, i = parse_value(data, i)
+        except TooDeep as e:   # step over the nesting rather than retrying it one bracket at a time
+            i = max(e.pos, m.end())
+            continue
         except (StopIteration, ValueError, IndexError, RecursionError):
             i = m.end()
             continue
         operands.append(value)
+        if len(operands) > 64:   # no operator takes this many: junk
+            del operands[0]
 
 
 class PageText:
@@ -617,6 +714,8 @@ class PageText:
             rect = [float(pdf.get(v)) for v in (pdf.get(a.get("Rect")) or [0, 0, 0, 0])]
             if isinstance(uri, bytes):
                 self.links.append({"uri": uri.decode("utf-8", "replace").strip(), "rect": rect})
+            if len(self.links) > 2000:
+                raise TooComplex("a page has more than 2000 links")
         for link in self.links:
             x0, y0, x1, y1 = min(link["rect"][0], link["rect"][2]), min(link["rect"][1], link["rect"][3]), \
                 max(link["rect"][0], link["rect"][2]), max(link["rect"][1], link["rect"][3])
@@ -629,12 +728,22 @@ class PageText:
         fonts = self.pdf.get(resources.get("Font")) or {}
         ref = fonts.get(name)
         key = ref if isinstance(ref, Ref) else (id(resources), name)
-        if key not in self.fonts:
-            self.fonts[key] = Font(self.pdf, ref)
+        if key not in self.pdf.font_cache:
+            try:
+                self.pdf.font_cache[key] = Font(self.pdf, ref)
+            except (TypeError, ValueError, IndexError, AttributeError):
+                self.pdf.font_cache[key] = None   # unreadable: remembered, so it isn't read again at every use
+        if self.pdf.font_cache[key] is None:
+            raise ValueError(f"unreadable font {name}")
+        self.fonts[key] = self.pdf.font_cache[key]
         return self.fonts[key]
 
-    def _run(self, data, resources, ctm, depth):
+    def _run(self, data, resources, ctm, depth, forms=()):
+        """Draw a content stream. forms: the Form XObjects being drawn, so one that draws itself is skipped."""
         pdf = self.pdf
+        pdf.drawn += len(data) + 256   # a form drawn many times costs something each time, however small it is
+        if pdf.drawn > MAX_CONTENT:
+            raise TooComplex(f"its pages take more than {MAX_CONTENT >> 20} MB of drawing instructions")
         stack, actual = [], []   # graphics state stack; marked-content stack (ActualText or None)
         font, size, tc, tw, th, tl, rise = None, 0, 0.0, 0.0, 1.0, 0.0, 0.0
         tm = tlm = IDENTITY
@@ -645,6 +754,9 @@ class PageText:
             if font is None:
                 return
             for code, text, width in font.decode(raw):
+                pdf.glyphs += 1
+                if pdf.glyphs > MAX_GLYPHS:
+                    raise TooComplex(f"it draws more than {MAX_GLYPHS} characters")
                 trm = mult((size * th, 0, 0, size, 0, rise), mult(tm, ctm))
                 x, y = trm[4], trm[5]
                 adv = (width * font.scale * size + tc + (tw if font.nbytes == 1 and code == 32 else 0)) * th
@@ -661,7 +773,7 @@ class PageText:
 
         for op, args in operations(data):
             try:
-                if op == "q":
+                if op == "q" and len(stack) < 1000:
                     stack.append(state())
                 elif op == "Q" and stack:
                     ctm, font, size, tc, tw, th, tl, rise = stack.pop()
@@ -722,32 +834,145 @@ class PageText:
                     x = pdf.get(ref)
                     if isinstance(x, dict) and x.get("Subtype") == "Image":
                         self.images += 1
-                    elif isinstance(x, dict) and x.get("Subtype") == "Form":
+                    elif isinstance(x, dict) and x.get("Subtype") == "Form" and ref not in forms:
                         matrix = tuple(float(v) for v in (pdf.get(x.get("Matrix")) or IDENTITY))
-                        self._run(pdf.stream(ref), pdf.get(x.get("Resources")) or resources, mult(matrix, ctm), depth + 1)
+                        self._run(pdf.stream(ref), pdf.get(x.get("Resources")) or resources, mult(matrix, ctm), depth + 1,
+                                  forms + (ref,))
                 elif op == "BI":
                     self.images += 1
             except (TypeError, ValueError, IndexError):
                 continue
 
     def lines(self):
-        """Group glyphs into lines (top to bottom, left to right)."""
-        glyphs = [g for g in self.glyphs if g.text or g.raw]
-        glyphs.sort(key=lambda g: (-g.y, g.x0))
-        rows = []
-        for g in glyphs:
-            for row in rows[-3:]:
-                if abs(row["y"] - g.y) <= 0.4 * min(row["size"], g.size):
-                    row["glyphs"].append(g)
-                    break
-            else:
-                rows.append({"y": g.y, "size": g.size, "glyphs": [g]})
-        out = []
-        for row in rows:
-            gs = sorted(row["glyphs"], key=lambda g: g.x0)
-            out.append(Line(self.number, gs))
-        out.sort(key=lambda l: (-l.y, l.x0))
-        return out
+        """Group glyphs into lines (top to bottom, left to right), straight across the page as many ATS read."""
+        return group_lines(self.glyphs, self.number)
+
+    def reading_lines(self):
+        """(lines in reading order, whether the page was read as two columns). Like lines(), except that two
+        columns that flow apart (a sidebar beside the main text) are read one after the other. Columns whose
+        lines pair up (dates or labels beside entries, as in moderncv, Europass and table CVs) are read across."""
+        rows = self.lines()
+        gutter = self._gutter(rows)
+        if gutter:
+            x, i, j = gutter
+            j = self._trim(rows, x, i, j)
+            region = [g for row in rows[i:j] for g in row.glyphs]
+            left = group_lines([g for g in region if g.x0 + g.x1 < 2 * x], self.number)
+            right = group_lines([g for g in region if g.x0 + g.x1 >= 2 * x], self.number)
+            if flows_apart(left, right):
+                return rows[:i] + left + right + rows[j:], True
+        return rows, False
+
+    def _gutter(self, rows):
+        """(x, first row, end row) for the longest run of rows that no character crosses at x, a gap between
+        20% and 80% across the page with at least five lines of text on each side; None if there's none."""
+        width, x0 = int(self.width) + 1, self.origin[0]
+        solid = [[g for g in row.glyphs if (g.text + g.raw).strip()] for row in rows]
+        sizes = sorted(g.size for gs in solid for g in gs)
+        if len(rows) < 10 or not sizes or not 0 < width <= 5000 or len(rows) > 5000:
+            return None
+        half = max(3.0, sizes[len(sizes) // 2] / 2)   # the gap must be at least a character wide
+        masks = []
+        for gs in solid:
+            mask = bytearray(width)
+            for g in gs:
+                a, b = max(0, int(g.x0 - x0 - half)), min(width, int(g.x1 - x0 + half) + 1)
+                if a < b:
+                    mask[a:b] = b"\x01" * (b - a)
+            masks.append(mask)
+        best = None
+        for x in range(int(width * 0.2), int(width * 0.8), 2):
+            run = []
+            for k in range(len(rows) + 1):
+                if k < len(rows) and not masks[k][x]:
+                    run.append(k)
+                    continue
+                score = min(sum(1 for r in run if solid[r] and solid[r][0].x0 - x0 < x),
+                            sum(1 for r in run if solid[r] and solid[r][-1].x1 - x0 > x))
+                if score >= 5 and (best is None or (score, len(run)) > best[0]):   # a tie: the longer run
+                    best = ((score, len(run)), x0 + x, run[0], run[-1] + 1)
+                run = []
+        return best[1:] if best else None
+
+    def _trim(self, rows, x, i, j):
+        """Where the columns in rows[i:j] end: where the shorter one stops, plus the rows below that carry on the
+        longer one at its own line spacing (a longer sidebar or main text). Short lines after a bigger gap (a new
+        section below a two-column table, whose lines happen not to cross x) are left out."""
+        def side(row, right):
+            return any((g.x0 + g.x1 >= 2 * x) == right for g in row.glyphs if (g.text + g.raw).strip())
+        left, right = [k for k in range(i, j) if side(rows[k], False)], [k for k in range(i, j) if side(rows[k], True)]
+        if not left or not right:
+            return j
+        end, longer = min(left[-1], right[-1]) + 1, (left if left[-1] > right[-1] else right)
+        ys = [rows[k].y for k in longer if k < end]
+        if len(ys) < 2:   # the columns hardly overlap: no line spacing to go by
+            return j
+        gaps = sorted(a - b for a, b in zip(ys, ys[1:]))
+        pitch, last = gaps[len(gaps) // 2], ys[-1]
+        for k in longer:
+            if k >= end:
+                if last - rows[k].y > 1.5 * pitch:
+                    return k
+                last = rows[k].y
+        return j
+
+
+def group_lines(glyphs, page):
+    """Group glyphs into lines (top to bottom, left to right)."""
+    glyphs = sorted((g for g in glyphs if g.text or g.raw), key=lambda g: (-g.y, g.x0))
+    rows = []
+    for g in glyphs:
+        for row in rows[-3:]:
+            if abs(row["y"] - g.y) <= 0.4 * min(row["size"], g.size):
+                row["glyphs"].append(g)
+                break
+        else:
+            rows.append({"y": g.y, "size": g.size, "glyphs": [g]})
+    out = [Line(page, sorted(row["glyphs"], key=lambda g: g.x0)) for row in rows]
+    out.sort(key=lambda l: (-l.y, l.x0))
+    return out
+
+
+def flows_apart(left, right):
+    """Whether two columns of lines are separate texts (a sidebar beside the main text), not labels or dates
+    beside the entries they belong to, which an ATS (and a person) reads on the same line."""
+    left, right = [l for l in left if l.text.strip()], [l for l in right if l.text.strip()]
+    if min(len(left), len(right)) < 5:
+        return False
+
+    def end(line):
+        return max((g.x1 for g in line.glyphs if (g.text + g.raw).strip()), default=line.glyphs[-1].x1)
+
+    def flowing(lines):   # most lines follow the one above at a normal line spacing (labels and dates sit apart)
+        close = [a.y - b.y <= 2.2 * max(a.size, b.size) for a, b in zip(lines, lines[1:])]
+        return sum(close) >= 0.6 * len(close)
+
+    def lined_up(xs):
+        mid = sorted(xs)[len(xs) // 2]
+        return sum(abs(v - mid) <= 2 for v in xs) / len(xs)
+
+    if not (flowing(left) and flowing(right)):
+        return False
+    if lined_up([end(l) for l in left]) >= 0.8 and lined_up([l.x0 for l in left]) < 0.5:
+        return False   # right-aligned against the gap: labels or dates
+    # In a table or a labelled CV every left line sits a fixed distance from a right line (0 when they share a
+    # baseline, more when the fonts differ). Two columns that flow apart keep no such step.
+    offsets = [min((l.y - r.y for r in right), key=abs) for l in left]
+    step = sorted(offsets)[len(offsets) // 2]
+    paired = [abs(o - step) <= 0.5 for o in offsets]
+    if sum(paired) < 0.5 * len(left):
+        return True
+
+    def carried_on(lines):   # lines that continue a wrapped line just above them
+        edge, start = max(end(l) for l in lines), min(l.x0 for l in lines)
+        return [b.y for a, b in zip(lines, lines[1:])
+                if a.y - b.y <= 1.6 * max(a.size, b.size) and end(a) >= edge - 0.15 * (edge - start)]
+
+    # Lines that pair up with the middle of a wrapped sentence on the other side aren't its labels.
+    wrapped_right, wrapped_left = carried_on(right), carried_on(left)
+    beside = sum(any(abs(l.y - y - step) <= 0.5 for y in wrapped_right) for l in left)
+    beside += sum(any(abs(y - r.y - step) <= 0.5 for y in wrapped_left) for r in right)
+    return beside >= 3
 
 
 class Line:
@@ -855,6 +1080,37 @@ class Document:
         lang = self.pdf.get(root.get("Lang"))
         self.lang = pdf_text_string(lang) if isinstance(lang, bytes) else None
         self.info = self.pdf.info
+        self._reading, self._columned = None, []
+
+    def reading_lines(self):
+        """The lines in reading order: self.lines, except that two columns that flow apart are read one after
+        the other (see PageText.reading_lines). self.lines keeps the across-the-page order many ATS read."""
+        if self._reading is None:
+            self._reading = []
+            for p in self.pages:
+                lines, split = p.reading_lines()
+                self._reading += lines
+                if split:
+                    self._columned.append(p.number)
+        return self._reading
+
+    @property
+    def columned(self):
+        """The numbers of the pages read as two columns."""
+        self.reading_lines()
+        return self._columned
+
+    def side_by_side(self):
+        """Whether many lines have a wide gap in their left 60%: text in columns or a table (ats_check's test)."""
+        gapped = [l for l in self.lines if any(x < self.pages[l.page - 1].width * 0.6 for x in l.gaps)]
+        return len(gapped) > 5 and len(gapped) > 0.15 * len(self.lines)
+
+    def undecoded(self):
+        """(characters that couldn't be decoded, characters drawn). Fonts with no Unicode map and no encoding
+        this reader knows give empty text, U+FFFD or control characters instead of letters."""
+        glyphs = [g for p in self.pages for g in p.glyphs]
+        bad = sum(1 for g in glyphs if not g.raw or "\ufffd" in g.raw or any(c < " " and c not in "\t\n\r" for c in g.raw))
+        return bad, len(glyphs)
 
     def text(self, raw=False):
         out, page = [], None
@@ -880,9 +1136,11 @@ class Document:
         return "".join(out)
 
     def markdown(self):
-        sizes = sorted(l.size for l in self.lines) or [0]
+        """The text in reading order (two columns that flow apart one after the other), with bold and links."""
+        lines = self.reading_lines()
+        sizes = sorted(l.size for l in lines) or [0]
         body = sizes[len(sizes) // 2]
-        out = [l.markdown(heading=l.bold and (l.size > body * 1.05 or l.text.isupper())) for l in self.lines]
+        out = [l.markdown(heading=l.bold and (l.size > body * 1.05 or l.text.isupper())) for l in lines]
         if self.links:
             out += ["", "Links in the file:"]
             seen = set()
@@ -995,7 +1253,10 @@ def main():
         sys.exit(__doc__)
     if not Path(args[0]).is_file():
         sys.exit(f"not found: {args[0]}")
-    doc = Document(args[0])
+    try:
+        doc = Document(args[0])
+    except TooComplex as e:
+        sys.exit(f"This PDF is too complex to read safely: {e}.")
     if doc.encrypted:
         sys.exit(ENCRYPTED[0].upper() + ENCRYPTED[1:] + ".")
     if "--json" in args:

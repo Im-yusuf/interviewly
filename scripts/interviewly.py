@@ -2,42 +2,78 @@
 """Interviewly state helper. Standard library only.
 
 Skills and agents call this instead of editing topics.json by hand, so the
-spaced-repetition dates and the JSON always come out right.
+spaced-repetition dates and the JSON always come out right. Free text (labels,
+questions, hints) never goes on the command line: pass it as JSON on standard
+input, through a heredoc with a quoted delimiter, or in a file with --file.
 
   home                            print the Interviewly home folder
+  stamp [MODE]                    local date and time for a new session or debrief file: 2026-11-09-1930-drill
   due [--limit N] [--match TEXT] [--fill] [--new N] [--json]
                                   today's queue: reviews due (weakest first), then today's new topics
-                                  (--new overrides how many), --fill tops up with the weakest
-  seed                            add topics from a JSON list on stdin (new: introduced a few a day)
-  score ID SCORE --source PATH [--label --question --answer-hint --skill --project]
-                                  record a 1-4 score and reschedule the topic
-  apply SESSION.json              schedule every thread in a reviewed session
+                                  (--new overrides how many), --fill tops up to N with the weakest
+  seed [--file PATH]              add topics from a JSON list (or one topic) on stdin or in PATH (new: introduced
+                                  a few a day)
+  score --stdin | --file PATH     record 1-4 scores given as JSON, one object or a list of {"id", "score",
+                                  "source", "label", "question", "answer_hint", "skill", "project"};
+                                  prints one result line per topic
+  score ID SCORE --source PATH [--skill S] [--project P]
+                                  record one score that carries no free text
+  apply SESSION.json              schedule every thread in a reviewed session (a bluff flag caps its thread at 2)
   streak [--json]                 practice streak
-  stats [--json]                  readiness per skill and project, sessions, streak
+  stats [--json]                  readiness with coverage, per skill and project, sessions, streak
   nudge                           SessionStart hook: one-line reminder, silent otherwise
   report SESSION.json [--open]    HTML report card
   dashboard [--open]              HTML progress dashboard
   share SESSION.json [--open]     1200x630 share card (PNG when Chrome is installed)
-  check                           validate every JSON file (not the cloned repos/) and every topic's id and dates
+  check                           validate every JSON file (not the cloned repos/), the shape of the profile,
+                                  projects, config and topics, and the dates in session and debrief file names
   audit-plan [--all]              which CV lines the audit must (re)check: new or changed lines, and lines
                                   whose project's code analysis is newer than their last check
   audit-merge PART.json...        merge assessed claims into audit.json and render audit.md
 
-Set INTERVIEWLY_HOME to move the home folder and INTERVIEWLY_TODAY (YYYY-MM-DD) to fake the date.
+A relative SESSION.json that isn't in the current folder is read from the home folder. Commands that change
+state hold HOME/.lock from read to write, so parallel calls queue instead of losing scores. While the active
+target's interview_date is ahead, reviews come back before it and more new topics are introduced each day.
+A new topic id is lowercase letters, digits, '.', '_' and '-' in two or more '/'-separated parts, each starting
+with a letter or digit: fastapi-todo/async-db.
+
+Set INTERVIEWLY_HOME (an absolute path) to move the home folder and INTERVIEWLY_TODAY (YYYY-MM-DD) to fake the date.
 """
 import argparse
+import contextlib
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # render and ats_check, even under python -I or PYTHONSAFEPATH
+
 DATE_PREFIX = re.compile(r"^(\d{4}-\d{2}-\d{2})")
-NEW_PER_DAY = 3   # never-practised topics introduced per day, unless config.json says otherwise
+NEW_PER_DAY = 3        # never-practised topics introduced per day, unless config.json says otherwise
+NEW_PER_DAY_MAX = 10   # the most a close interview raises that to
+MAX_INTERVAL = 30      # days between reviews at most, unless config.json max_interval_days says otherwise
+LOCK_TIMEOUT = 10      # seconds to wait for another iv command to finish with the state
 DRILL_SCORE = re.compile(r"\*\*Score:\*\*\s*([1-4])\s*/\s*4")
+SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")   # can name a file: no path separators, no ".."
+TOPIC_ID = re.compile(r"[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+")   # safe as a command-line argument
+SCORE_FIELDS = ("label", "question", "answer_hint", "skill", "project")
+CAPPING_FLAGS = ("bluff", "contradicts-code")   # rubric.md: a thread with one of these scores at most 2
+QUIET = False   # the nudge never prints warnings
+
+
+class StateError(Exception):
+    """A state file or setting iv can't use. main() prints it in one line, with no traceback."""
+
+
+def warn(message):
+    if not QUIET:
+        print(message, file=sys.stderr)
 
 
 def home():
@@ -46,7 +82,42 @@ def home():
 
 def today():
     override = os.environ.get("INTERVIEWLY_TODAY")
-    return dt.date.fromisoformat(override) if override else dt.date.today()
+    if not override:
+        return dt.date.today()
+    try:
+        return dt.date.fromisoformat(override)
+    except ValueError:
+        raise StateError(f"INTERVIEWLY_TODAY should be a YYYY-MM-DD date, not {override!r}") from None
+
+
+def check_home():
+    """Refuse a relative home folder or one another account owns, and make an existing one private (0700): it
+    holds the CV, transcripts and cloned code, and other accounts can't look inside a 0700 folder."""
+    root = home()
+    if not root.is_absolute():
+        raise StateError(f"INTERVIEWLY_HOME must be an absolute path, not {str(root)!r}")
+    if os.name != "posix" or not hasattr(os, "getuid"):
+        return
+    try:
+        info = root.stat()
+    except OSError:
+        return   # not created yet: the commands that write create it private
+    if info.st_uid != os.getuid() and os.getuid() != 0:
+        raise StateError(f"{root} belongs to another account, which can read everything in it: "
+                         "set INTERVIEWLY_HOME to a folder you own")
+    if info.st_mode & 0o077:
+        try:
+            os.chmod(root, 0o700)
+        except OSError:   # some file systems (FAT, exFAT, network shares) don't allow it: carry on
+            warn(f"couldn't make {root} private (its file system doesn't allow it); other accounts may be able to read it")
+
+
+def ensure_dir(folder):
+    """A folder iv can write in. A missing home folder is created private (0700)."""
+    root = home()
+    if not root.is_dir():
+        root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    Path(folder).mkdir(parents=True, exist_ok=True)
 
 
 def utf8_stdio():
@@ -68,6 +139,22 @@ def load_json(path, default):
         return default
 
 
+def load_state(path, default):
+    """A JSON state file, or default when it doesn't exist. One iv can't read raises StateError."""
+    try:
+        text = read_text(path)
+    except FileNotFoundError:
+        return default
+    except (OSError, ValueError) as e:
+        raise StateError(f"can't read {path}: {e}") from None
+    if not text.strip():
+        raise StateError(f"{path} is empty: run `iv check`")
+    try:
+        return json.loads(text)
+    except ValueError as e:
+        raise StateError(f"{path} isn't valid JSON ({e}): run `iv check`") from None
+
+
 def read_json_arg(path):
     """A JSON object named on the command line, or a one-line error."""
     try:
@@ -81,14 +168,107 @@ def read_json_arg(path):
     return data
 
 
-def save_json(path, data):
+def read_input(file):
+    """The text of --file PATH, or standard input when there's no --file."""
+    if not file:
+        return read_stdin()
+    try:
+        return read_text(file)
+    except FileNotFoundError:
+        sys.exit(f"not found: {file}")
+    except (OSError, ValueError) as e:
+        sys.exit(f"can't read {file}: {e}")
+
+
+def session_path(value):
+    """A session file named on the command line. A relative path that isn't in the current folder is looked up
+    in the home folder, so `sessions/<name>.json` works from any folder."""
+    path = Path(value).expanduser()
+    if not path.is_absolute() and not path.exists() and (home() / path).exists():
+        return home() / path
+    return path
+
+
+def replace(src, dst):
+    """os.replace, retried for a moment on Windows, where a reader holding the file open blocks it."""
+    for attempt in range(10):
+        try:
+            return os.replace(src, dst)
+        except PermissionError:
+            if os.name != "nt" or attempt == 9:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
+def write_atomic(path, text, follow_links=False):
+    """Write a text file in one step: a private temp file beside it, flushed to disk, then renamed over it, so a
+    crash never leaves half a file. A symlink at path is replaced, not written through, unless follow_links
+    (then a state file kept in a synced folder stays a link and the file it points to is updated)."""
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if follow_links:
+        path = path.resolve()
+    ensure_dir(path.parent)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    os.replace(tmp, path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+    if os.name == "posix":   # make the rename itself survive a power cut
+        with contextlib.suppress(OSError):
+            folder = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(folder)
+            finally:
+                os.close(folder)
+
+
+def save_json(path, data):
+    write_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n", follow_links=True)
+
+
+@contextlib.contextmanager
+def state_lock():
+    """Hold HOME/.lock while a command reads, changes and saves state, so parallel iv calls (several scores sent
+    at once, a review applied during a drill) queue up instead of overwriting each other's changes."""
+    ensure_dir(home())
+    path = home() / ".lock"
+    fd = os.open(str(path), os.O_RDWR | os.O_CREAT, 0o600)
+    locked = False
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            def first_byte(mode):
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, mode, 1)
+            take, release = (lambda: first_byte(msvcrt.LK_NBLCK)), (lambda: first_byte(msvcrt.LK_UNLCK))
+        else:
+            import fcntl
+            take = lambda: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            release = lambda: fcntl.flock(fd, fcntl.LOCK_UN)
+        deadline = time.monotonic() + LOCK_TIMEOUT
+        while not locked:
+            try:
+                take()
+                locked = True
+            except OSError as e:
+                if os.name != "nt" and not isinstance(e, BlockingIOError):
+                    break   # a file system that can't lock: carry on as before rather than not at all
+                if time.monotonic() > deadline:
+                    raise StateError(f"another iv command has held {path} for {LOCK_TIMEOUT} s: try again") from None
+                time.sleep(0.02)
+        yield
+    finally:
+        if locked:
+            with contextlib.suppress(OSError):
+                release()
+        os.close(fd)
 
 
 def unquote(value):
@@ -99,18 +279,101 @@ def unquote(value):
     return value
 
 
-def frontmatter(path):
-    text = read_text(path, errors="ignore")
-    if not text.startswith("---"):
-        return {}
+def split_frontmatter(lines):
+    """(meta, the lines after it): the key: value pairs between a Markdown file's first two --- lines."""
+    lines = iter(lines)
+    first = next(lines, "")
+    if not first.startswith("---"):
+        return {}, lines
     meta = {}
-    for line in text.splitlines()[1:]:
+    for line in lines:
         if line.strip() == "---":
             break
         key, sep, value = line.partition(":")
         if sep:
             meta[key.strip()] = unquote(value)
-    return meta
+    return meta, lines
+
+
+def frontmatter(path):
+    """A Markdown file's frontmatter, reading no further than its closing --- line."""
+    with open(path, encoding="utf-8-sig", errors="ignore") as f:
+        return split_frontmatter(f)[0]
+
+
+def text_or_none(value):
+    """value stripped when it's non-empty text, else None."""
+    return (value.strip() or None) if isinstance(value, str) else None
+
+
+def safe_slug(value):
+    """value when it can name a file in targets/ or projects/ (no path separators, no ..), else None."""
+    return value if isinstance(value, str) and SLUG.fullmatch(value) else None
+
+
+def parse_day(value):
+    """A YYYY-MM-DD date (anything after the tenth character is ignored), or None."""
+    try:
+        return dt.date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def file_day(name):
+    """The date a sessions/ or debriefs/ file name starts with, or None (2026-02-30 isn't a date)."""
+    m = DATE_PREFIX.match(name)
+    return parse_day(m.group(1)) if m else None
+
+
+# ---------- the files agents write ----------
+
+def entries(value):
+    """The objects in a list, with slug and name as text or None: agents write these files."""
+    return [dict(e, slug=text_or_none(e.get("slug")), name=text_or_none(e.get("name")))
+            for e in (value if isinstance(value, list) else []) if isinstance(e, dict)]
+
+
+def load_profile():
+    path = home() / "profile.json"
+    data = load_state(path, {})
+    if not isinstance(data, dict):
+        raise StateError(f"{path} should hold a JSON object: run `iv check`")
+    return dict(data, skills=entries(data.get("skills")))
+
+
+def load_index():
+    path = home() / "projects" / "index.json"
+    data = load_state(path, [])
+    if isinstance(data, dict) and isinstance(data.get("projects"), list):
+        data = data["projects"]
+    if not isinstance(data, list):
+        raise StateError(f"{path} should hold a JSON list of projects: run `iv check`")
+    return entries(data)
+
+
+def load_config():
+    path = home() / "config.json"
+    data = load_state(path, {})
+    if not isinstance(data, dict):
+        raise StateError(f"{path} should hold a JSON object: run `iv check`")
+    return data
+
+
+def setting(config, key, default, low):
+    """A whole-number setting from config.json, or default when it's missing or not a sensible number."""
+    value = config.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return default
+    try:
+        number = int(value)
+    except (ValueError, OverflowError):
+        return default
+    return number if number >= low else default
+
+
+def target_file(profile):
+    slug = safe_slug(profile.get("active_target"))
+    return home() / "targets" / f"{slug}.md" if slug else None
 
 
 # ---------- topics and spaced repetition ----------
@@ -119,8 +382,41 @@ def topics_path():
     return home() / "topics.json"
 
 
+def topics_shape(data, path):
+    """topics.json as {"version": 1, "topics": [...]} (a bare list is read as the topics), or StateError."""
+    if isinstance(data, list):
+        data = {"version": 1, "topics": data}
+    if not isinstance(data, dict) or not isinstance(data.setdefault("topics", []), list):
+        raise StateError(f'{path} should hold {{"version": 1, "topics": [...]}}: run `iv check`')
+    return data
+
+
 def load_topics():
-    return load_json(topics_path(), {"version": 1, "topics": []})
+    """topics.json, or the version saved before the last change (topics.json.bak) while topics.json is broken."""
+    path = topics_path()
+    try:
+        return topics_shape(load_state(path, {"version": 1, "topics": []}), path)
+    except StateError as problem:
+        backup = path.with_name(path.name + ".bak")
+        try:
+            data = topics_shape(json.loads(read_text(backup)), backup)
+        except (OSError, ValueError, StateError):
+            raise problem from None
+        warn(f"{problem}; using {backup.name}, the version before the last change, until topics.json is saved")
+        return data
+
+
+def save_topics(data):
+    """Save topics.json, keeping the version it replaces as topics.json.bak when that one is readable."""
+    path = topics_path()
+    try:
+        previous = read_text(path)
+        json.loads(previous)
+    except (OSError, ValueError):
+        previous = None
+    if previous:
+        write_atomic(path.with_name(path.name + ".bak"), previous)
+    save_json(path, data)
 
 
 def next_interval(score, previous):
@@ -133,76 +429,210 @@ def next_interval(score, previous):
     return max(7, previous * 3)
 
 
+def check_new_id(topic_id):
+    """A new topic's id, or ValueError. Ids go on command lines, so a new one is only lowercase letters, digits,
+    '.', '_' and '-' in two or more '/'-separated parts. Existing topics keep the ids they have."""
+    if not TOPIC_ID.fullmatch(topic_id):
+        raise ValueError(f"{topic_id!r} isn't a topic id: use lowercase letters, digits, '.', '_' and '-' in two or "
+                         "more '/'-separated parts, each starting with a letter or digit, like fastapi-todo/async-db")
+    return topic_id
+
+
+def interview_gap(days, score, days_left):
+    """days until the next review, brought before an interview that's more than a day away: by the day before it,
+    and for a score of 3 or less by halfway there, so a weak topic comes back at least once before the day."""
+    if days_left and days_left > 1:
+        days = min(days, days_left - 1, max(1, days_left // 2) if score <= 3 else days)
+    return days
+
+
 def is_new(topic):
     return topic.get("last_score") is None
 
 
-def is_due(topic, day):
-    """A practised topic whose review date has come. New topics are never "due": a few are introduced each day."""
-    return not is_new(topic) and topic.get("next_due", day.isoformat()) <= day.isoformat()
+def due_day(topic, day, plan=None):
+    """The ISO date a practised topic's review comes due: its next_due, or earlier when an interview still ahead
+    falls on or before that date (the topic was scored before the interview date was set). Then it comes due as
+    if the date had been known, interview_gap days after its last practice, and stays due until it's practised.
+    The stored next_due doesn't change."""
+    due = topic.get("next_due", day.isoformat())
+    countdown = (plan or {}).get("countdown")
+    if (plan or {}).get("days_left") and due >= countdown["date"]:
+        interview = parse_day(countdown["date"])
+        history = topic.get("history") if isinstance(topic.get("history"), list) else []
+        last = parse_day(history[-1].get("date")) if history and isinstance(history[-1], dict) else None
+        if last and last < interview:
+            days = (interview - last).days
+            due = min(due, (last + dt.timedelta(days=interview_gap(days, topic["last_score"], days))).isoformat())
+        else:   # no practice date to go by: the day before
+            due = min(due, (interview - dt.timedelta(days=1)).isoformat())
+    return due
 
 
-def new_allowance(data, day):
-    """How many new topics today's practice can still introduce."""
-    per_day = load_json(home() / "config.json", {}).get("new_per_day", NEW_PER_DAY)
-    started = sum(bool(t.get("history")) and t["history"][0].get("date") == day.isoformat() for t in data["topics"])
-    waiting = sum(is_new(t) for t in data["topics"])
-    return max(0, min(int(per_day) - started, waiting))
+def is_due(topic, day, plan=None):
+    """A practised topic whose review date (due_day) has come. New topics are never "due": a few are introduced
+    each day."""
+    return not is_new(topic) and due_day(topic, day, plan) <= day.isoformat()
 
 
-def relevance_scorer():
+def started_on(topic, iso):
+    history = topic.get("history")
+    return bool(history) and isinstance(history[0], dict) and history[0].get("date") == iso
+
+
+def usable(topics):
+    """The topics `due`, `stats` and the reminder can work with. `iv check` names the others."""
+    good = [t for t in topics if topic_problem(t) is None]
+    if len(good) < len(topics):
+        warn(f"skipped {len(topics) - len(good)} broken topic(s) in topics.json: run `iv check`")
+    return good
+
+
+REQUIREMENT_LINE = re.compile(r"^\s*(?:[-*+•|]|\d+[.)])|must|require|nice to have|experience (?:with|in)|"
+                              r"knowledge of|familiar|proficien|stack|skill", re.I)
+
+
+def relevance_scorer(profile):
     """Rank new topics for the active job, highest first: its gaps (skills it mentions that the user hasn't used
     yet), then the CV-only skills it mentions, then by how often its analysis mentions the topic's skill or project.
-    Counting alone would bury a gap the job names once under the projects it cites as evidence again and again."""
-    profile = load_json(home() / "profile.json", {})
-    path = home() / "targets" / f"{profile.get('active_target')}.md"
-    text = read_text(path, errors="ignore").lower() if profile.get("active_target") and path.exists() else ""
-    names = {s.get("slug"): s.get("name") for s in profile.get("skills", [])}
-    status = {s.get("slug"): s.get("status") for s in profile.get("skills", [])}
-    names.update({p.get("slug"): p.get("name") for p in load_json(home() / "projects" / "index.json", [])})
+    Counting alone would bury a gap the job names once under the projects it cites as evidence again and again.
+    Names of three letters or fewer (Go, AI, C#, the AWS of "AWS (S3, EC2)"), and the slug in capitals, count only
+    as written and only on requirement lines (bullets, table rows, "must have"), so "go above and beyond" isn't Go."""
+    path = target_file(profile)
+    try:
+        text = read_text(path, errors="ignore") if path else ""
+    except OSError:
+        text = ""
+    if not text:
+        return lambda topic: (0, 0)
+    lower = text.lower()
+    wanted = "\n".join(line for line in text.splitlines() if REQUIREMENT_LINE.search(line))
+    names = {s["slug"]: s["name"] for s in profile["skills"]}
+    status = {s["slug"]: s.get("status") for s in profile["skills"]}
+    names.update({p["slug"]: p["name"] for p in load_index()})
     weak = {"gap": 2, "cv-only": 1}
+    counts, scores = {}, {}
+
+    def mentions(slug):
+        if slug not in counts:
+            name = names.get(slug) or ""
+            plain = name.split(" (")[0].strip()   # "AWS (S3, EC2)" -> "AWS"
+            long = {k for k in (slug.lower(), slug.lower().replace("-", " "), name.lower(), plain.lower()) if len(k) > 3}
+            shorts = {k for k in (plain, slug.upper()) if 1 < len(k) <= 3}
+            counts[slug] = sum(len(re.findall(rf"(?<![a-z0-9]){re.escape(k)}(?![a-z0-9])", lower)) for k in long) + sum(
+                len(re.findall(rf"(?<![A-Za-z0-9]){re.escape(k)}(?![A-Za-z0-9])", wanted)) for k in shorts)
+        return counts[slug]
 
     def score(topic):
-        keys = set()
-        for slug in (topic.get("skill"), topic.get("project")):
-            if slug:
-                keys |= {slug.lower(), slug.lower().replace("-", " "), (names.get(slug) or "").lower()}
-        mentions = sum(len(re.findall(rf"(?<![a-z0-9]){re.escape(k)}(?![a-z0-9])", text)) for k in keys if len(k) > 1)
-        return (weak.get(status.get(topic.get("skill")), 0) if mentions else 0, mentions)
-    return score if text else (lambda topic: (0, 0))
+        key = (topic.get("skill"), topic.get("project"))
+        if key not in scores:   # many topics share a skill and project: count each pair once
+            n = sum(mentions(slug) for slug in set(key) if slug)
+            scores[key] = (weak.get(status.get(topic.get("skill")), 0) if n else 0, n)
+        return scores[key]
+    return score
 
 
-def record_score(data, topic_id, score, source, fields, day):
-    if score not in (1, 2, 3, 4):
+def schedule_plan(day, profile=None, config=None):
+    """What scheduling needs, worked out once per command: the settings, the interview countdown and the job ranking."""
+    profile = load_profile() if profile is None else profile
+    config = load_config() if config is None else config
+    countdown = interview_countdown(profile, day)
+    return {"countdown": countdown,
+            "days_left": countdown["days"] if countdown and countdown["days"] > 0 else None,
+            "per_day": setting(config, "new_per_day", NEW_PER_DAY, 0),
+            "max_interval": setting(config, "max_interval_days", MAX_INTERVAL, 1),
+            "rank": relevance_scorer(profile)}
+
+
+def in_scope(topics, plan):
+    """The topics readiness is measured on: with an active job, those its analysis mentions by skill or project,
+    plus general ones that have neither; without one (or when it mentions none of them), every topic."""
+    mentioned = [bool(plan["rank"](t)[1]) for t in topics]
+    if not any(mentioned):
+        return list(topics)
+    return [t for t, m in zip(topics, mentioned) if m or not (t.get("skill") or t.get("project"))]
+
+
+def new_allowance(topics, day, plan):
+    """How many new topics today's practice can still introduce: new_per_day, or more while an interview is
+    coming, so that every topic in its scope is introduced (at most NEW_PER_DAY_MAX a day) a day before it."""
+    iso = day.isoformat()
+    per_day = plan["per_day"]
+    if plan["days_left"]:
+        pool = sum(is_new(t) or started_on(t, iso) for t in in_scope(topics, plan))
+        per_day = max(per_day, min(NEW_PER_DAY_MAX, math.ceil(pool / max(1, plan["days_left"] - 1))))
+    started = sum(started_on(t, iso) for t in topics)
+    waiting = sum(is_new(t) for t in topics)
+    return max(0, min(per_day - started, waiting))
+
+
+def norm_source(source):
+    """A history source as <folder>/<file>: an absolute /…/.interviewly/sessions/x.md becomes sessions/x.md."""
+    return "/".join([p for p in re.split(r"[\\/]+", str(source or "").strip()) if p and p != "."][-2:])
+
+
+def record_score(data, topic_id, score, source, fields, day, plan=None):
+    """Score a topic 1-4 and reschedule it. The interval grows from the days actually waited since the last
+    practice, never more than interval_days, so an early review (a --fill extra, or one brought before an
+    interview) doesn't stretch it. Scores from one day count as one review: they grow from the interval the day
+    started with, at the day's lowest score, and the same source again (a retried command) replaces its own
+    score. Intervals stop at max_interval, and interview_gap brings next_due before an interview."""
+    plan = plan or {}
+    if score not in (1, 2, 3, 4) or isinstance(score, bool):
         raise ValueError(f"score must be 1-4, got {score}")
-    topic = next((t for t in data["topics"] if t.get("id") == topic_id), None)
+    topic_id = text_or_none(topic_id)
+    if not topic_id:
+        raise ValueError("a score needs a topic id")
+    source, iso = norm_source(source), day.isoformat()
+    topic = next((t for t in data["topics"] if isinstance(t, dict) and t.get("id") == topic_id), None)
     if topic is None:
-        topic = {"id": topic_id, "label": fields.get("label") or topic_id, "skill": None, "project": None,
-                 "question": None, "answer_hint": None, "last_score": None, "interval_days": 0,
-                 "next_due": day.isoformat(), "history": []}
+        topic = {"id": check_new_id(topic_id), "label": topic_id, "skill": None, "project": None, "question": None,
+                 "answer_hint": None, "last_score": None, "interval_days": 0, "next_due": iso, "history": []}
         data["topics"].append(topic)
+    history = [h for h in topic.get("history") or [] if isinstance(h, dict)] if isinstance(topic.get("history"), list) else []
+    topic["history"] = history
+    for key in ("skill", "project"):
+        if not isinstance(topic.get(key), (str, type(None))):
+            topic[key] = None
     for key, value in fields.items():
+        value = text_or_none(value) if key in ("skill", "project") else inline(value)
         if value:
             topic[key] = value
-    interval = next_interval(score, topic.get("interval_days") or 0)
+    base = topic.get("interval_days")
+    base = base if isinstance(base, int) and not isinstance(base, bool) and base >= 0 else 0
+    todays, lowest = [], score
+    while history and history[-1].get("date") == iso and isinstance(history[-1].get("prev_interval"), int):
+        todays.insert(0, history.pop())
+    if todays:
+        base = todays[0]["prev_interval"]
+        todays = [h for h in todays if norm_source(h.get("source")) != source]   # a retry replaces its own score
+        lowest = min([score] + [h["score"] for h in todays if h.get("score") in (1, 2, 3, 4)])
+        history.extend(todays)
+    elif history:
+        since = parse_day(history[-1].get("date"))
+        if since and since < day:
+            base = min(base, (day - since).days)
+    interval = min(next_interval(lowest, base), plan.get("max_interval", MAX_INTERVAL))
+    gap = interview_gap(interval, lowest, plan.get("days_left"))
     topic["last_score"] = score
     topic["interval_days"] = interval
-    topic["next_due"] = (day + dt.timedelta(days=interval)).isoformat()
-    topic.setdefault("history", []).append({"date": day.isoformat(), "score": score, "source": source})
+    topic["next_due"] = (day + dt.timedelta(days=gap)).isoformat()
+    history.append({"date": iso, "score": score, "source": source, "prev_interval": base})
     return topic
 
 
-def pick_due(data, day, limit=None, match=None, fill=False, new=None):
+def pick_due(topics, day, plan, limit=None, match=None, fill=False, new=None):
     """Today's queue: reviews owed (weakest first), then today's new topics (most relevant to the active job
-    first), then, with fill, the weakest practised topics that aren't due yet. Each comes back with a "kind"."""
-    topics = data["topics"]
+    first), then, with fill, the weakest practised topics that aren't due yet. Each comes back with a "kind", and a
+    practised one with the next_due it's going by (due_day)."""
+    allowance = new_allowance(topics, day, plan) if new is None else new
     if match:
         needle = match.lower()
         topics = [t for t in topics if needle in " ".join(str(t.get(k) or "") for k in ("id", "skill", "project", "label")).lower()]
+    topics = [t if is_new(t) else dict(t, next_due=due_day(t, day, plan)) for t in topics]
     weakest = lambda t: (t["last_score"], t.get("next_due", ""))
     queue = [dict(t, kind="review") for t in sorted((t for t in topics if is_due(t, day)), key=weakest)]
-    allowance = new_allowance(data, day) if new is None else new
-    score = relevance_scorer()
+    score = plan["rank"]
     fresh = sorted((t for t in topics if is_new(t)), key=lambda t: tuple(-n for n in score(t)))   # stable: keeps seeding order on ties
     queue += [dict(t, kind="new") for t in fresh[:allowance]]
     if fill and limit and len(queue) < limit:
@@ -215,13 +645,29 @@ def pick_due(data, day, limit=None, match=None, fill=False, new=None):
 
 # ---------- streaks and stats ----------
 
+def abandoned(path):
+    """A session opened but never practised: frontmatter with status in-progress, then at most a title."""
+    try:
+        if path.stat().st_size > 1024:   # a header is a few hundred bytes; skip reading real transcripts
+            return False
+        meta, rest = split_frontmatter(read_text(path, errors="ignore").splitlines())
+    except OSError:
+        return False
+    return meta.get("status") == "in-progress" and not any(l.strip() and not l.startswith("# ") for l in rest)
+
+
 def practice_days():
+    """Days with practice: a session that got further than its header, or a debrief (on its `written:` date when
+    it has one, otherwise the date in its name)."""
     days = set()
-    for folder in ("sessions", "debriefs"):
-        for f in (home() / folder).glob("*.md"):
-            m = DATE_PREFIX.match(f.name)
-            if m:
-                days.add(dt.date.fromisoformat(m.group(1)))
+    for f in (home() / "sessions").glob("*.md"):
+        day = file_day(f.name)
+        if day and day not in days and not abandoned(f):
+            days.add(day)
+    for f in (home() / "debriefs").glob("*.md"):
+        day = parse_day(frontmatter(f).get("written") or "") or file_day(f.name)
+        if day:
+            days.add(day)
     return days
 
 
@@ -247,6 +693,15 @@ def readiness(topics):
     return round(sum((t["last_score"] - 1) / 3 * 100 for t in tested) / len(tested))
 
 
+def current_readiness(topic, day):
+    """A tested topic's readiness today, 0-100, one score point lower once it's overdue by more than its interval."""
+    score = topic["last_score"]
+    due = parse_day(topic.get("next_due"))
+    if due and (day - due).days > (topic.get("interval_days") or 0):
+        score = max(1, score - 1)
+    return (score - 1) / 3 * 100
+
+
 def session_list():
     from render import num
     rows = []
@@ -261,61 +716,64 @@ def session_list():
         if score is None and meta.get("mode") == "drill":
             scores = [int(s) for s in DRILL_SCORE.findall(read_text(md, errors="ignore"))]
             score = round(sum(scores) / len(scores), 1) if scores else None
-        m = DATE_PREFIX.match(md.name)
-        rows.append({"file": f"sessions/{md.name}", "date": m.group(1) if m else meta.get("date", "")[:10],
+        when = file_day(md.name) or parse_day(meta.get("date") or "")
+        rows.append({"file": f"sessions/{md.name}", "date": when.isoformat() if when else "",
                      "mode": meta.get("mode"), "focus": meta.get("focus"), "status": meta.get("status"),
                      "score": score, "label": review.get("label") if review else None})
     return rows
 
 
 def interview_countdown(profile, day):
-    slug = profile.get("active_target")
-    if not slug:
+    path = target_file(profile)
+    if path is None:
         return None
-    meta = frontmatter(home() / "targets" / f"{slug}.md") if (home() / "targets" / f"{slug}.md").exists() else {}
+    meta = frontmatter(path) if path.exists() else {}
     try:   # "2026-11-13", or with a time after it: "2026-11-13 14:00"
         when = dt.date.fromisoformat((meta.get("interview_date") or "")[:10])
     except ValueError:
         return None
-    return {"company": meta.get("company") or slug, "role": meta.get("role"), "date": when.isoformat(),
+    return {"company": meta.get("company") or path.stem, "role": meta.get("role"), "date": when.isoformat(),
             "days": (when - day).days}
 
 
 def build_stats(day):
-    profile = load_json(home() / "profile.json", {})
-    topics = load_topics()["topics"]
+    """Readiness ("overall") is measured on the topics in scope (see in_scope), each counted once: untested ones
+    count as 0 and long-overdue ones a point lower. "mastery" is the same over the tested ones only."""
+    profile = load_profile()
+    plan = schedule_plan(day, profile)
+    topics = usable(load_topics()["topics"])
+    tested = lambda mine: sum(not is_new(t) for t in mine)
     skills = []
-    for s in profile.get("skills", []):
-        mine = [t for t in topics if t.get("skill") == s.get("slug")]
-        skills.append({"name": s.get("name"), "slug": s.get("slug"), "status": s.get("status"),
-                       "readiness": readiness(mine), "tested": sum(t.get("last_score") is not None for t in mine),
-                       "total": len(mine), "due": sum(is_due(t, day) for t in mine)})
+    for s in profile["skills"]:
+        mine = [t for t in topics if t.get("skill") == s["slug"]] if s["slug"] else []
+        skills.append({"name": s["name"], "slug": s["slug"], "status": s.get("status"), "readiness": readiness(mine),
+                       "tested": tested(mine), "total": len(mine), "due": sum(is_due(t, day, plan) for t in mine)})
     projects = []
-    for p in load_json(home() / "projects" / "index.json", []):
-        mine = [t for t in topics if t.get("project") == p.get("slug")]
-        projects.append({"name": p.get("name"), "slug": p.get("slug"), "readiness": readiness(mine),
-                         "tested": sum(t.get("last_score") is not None for t in mine), "total": len(mine),
-                         "due": sum(is_due(t, day) for t in mine)})
-    scored = [s["readiness"] for s in skills if s["readiness"] is not None]
-    data = {"topics": topics}
-    weakest = sorted((t for t in topics if t.get("last_score") is not None),
-                     key=lambda t: (t["last_score"], t.get("next_due", "")))[:5]
+    for p in load_index():
+        mine = [t for t in topics if t.get("project") == p["slug"]] if p["slug"] else []
+        projects.append({"name": p["name"], "slug": p["slug"], "readiness": readiness(mine),
+                         "tested": tested(mine), "total": len(mine), "due": sum(is_due(t, day, plan) for t in mine)})
+    scope = in_scope(topics, plan)
+    practised = [current_readiness(t, day) for t in scope if not is_new(t)]
+    weakest = sorted((t for t in topics if not is_new(t)), key=lambda t: (t["last_score"], t.get("next_due", "")))[:5]
     soon = (day + dt.timedelta(days=7)).isoformat()
     return {
         "date": day.isoformat(),
         "name": profile.get("name"), "headline": profile.get("headline"),
         "target_level": profile.get("target_level"), "active_target": profile.get("active_target"),
-        "countdown": interview_countdown(profile, day),
-        "overall": round(sum(scored) / len(scored)) if scored else None,
+        "countdown": plan["countdown"],
+        "overall": round(sum(practised) / len(scope)) if practised else None,
+        "mastery": round(sum(practised) / len(practised)) if practised else None,
+        "coverage": {"tested": len(practised), "total": len(scope)},
         "skills": skills, "projects": projects,
-        "due_today": sum(is_due(t, day) for t in topics),
-        "due_week": sum(not is_new(t) and t.get("next_due", "") <= soon for t in topics),
-        "new_today": new_allowance(data, day),
+        "due_today": sum(is_due(t, day, plan) for t in topics),
+        "due_week": sum(not is_new(t) and due_day(t, day, plan) <= soon for t in topics),
+        "new_today": new_allowance(topics, day, plan),
         "new_waiting": sum(is_new(t) for t in topics),
         "topics_total": len(topics),
-        "topics_tested": sum(t.get("last_score") is not None for t in topics),
+        "topics_tested": tested(topics),
         "weakest": [{"id": t["id"], "label": t.get("label"), "last_score": t["last_score"],
-                     "next_due": t.get("next_due")} for t in weakest],
+                     "next_due": due_day(t, day, plan)} for t in weakest],
         "sessions": session_list(),
         "streak": streak_info(day),
     }
@@ -323,20 +781,27 @@ def build_stats(day):
 
 # ---------- reminder ----------
 
-def nudge_message(day):
-    if not (home() / "profile.json").exists():
-        return None
-    config = load_json(home() / "config.json", {})
-    if config.get("nudge") is False:
-        return None
-    marker = home() / ".nudge-shown"
-    if marker.exists() and read_text(marker, errors="ignore").strip() == day.isoformat():
-        return None
+def debriefed(profile, countdown):
+    """Whether debriefs/ has a file for this interview: dated on or after it, naming the target or the company
+    (HP and EA count; the company's first word alone counts only from three letters)."""
+    company = re.sub(r"[^a-z0-9]+", "-", countdown["company"].lower()).strip("-")
+    first = company.split("-")[0]
+    names = {n.lower() for n in (profile.get("active_target"), company) if isinstance(n, str) and len(n) >= 2}
+    if len(first) >= 3:
+        names.add(first)
+    for f in (home() / "debriefs").glob("*.md"):
+        day = file_day(f.name)
+        if day and day.isoformat() >= countdown["date"] and any(f"-{n}-" in f"-{f.stem.lower()}-" for n in names):
+            return True
+    return False
+
+
+def practice_nudge(day, plan):
     streak = streak_info(day)
-    data = load_topics()
-    due = sum(is_due(t, day) for t in data["topics"])
-    new = new_allowance(data, day)
-    countdown = interview_countdown(load_json(home() / "profile.json", {}), day)
+    topics = usable(load_topics()["topics"])
+    due = sum(is_due(t, day, plan) for t in topics)
+    new = new_allowance(topics, day, plan)
+    countdown = plan["countdown"]
     parts = []
     if countdown and 0 <= countdown["days"] <= 14:
         when = "today" if countdown["days"] == 0 else "tomorrow" if countdown["days"] == 1 else f"in {countdown['days']} days"
@@ -355,9 +820,30 @@ def nudge_message(day):
         parts.append(f"keep your {streak['current']}-day streak going")
     if not parts:
         return None
-    marker.write_text(day.isoformat(), encoding="utf-8")
-    action = "/interviewly:drill (about 5 min)" if due or new else "/interviewly:interview"
+    minutes = " (about 5 min)" if due > 8 or due + new <= 6 else ""   # a drill takes 6 items in about 5 minutes
+    action = f"/interviewly:drill{minutes}" if due or new else "/interviewly:interview"
     return "Interviewly: " + " · ".join(parts) + f" → {action}"
+
+
+def nudge_message(day):
+    if not (home() / "profile.json").exists():
+        return None
+    config = load_config()
+    if config.get("nudge") is False:
+        return None
+    marker = home() / ".nudge-shown"
+    if marker.exists() and read_text(marker, errors="ignore").strip() == day.isoformat():
+        return None
+    profile = load_profile()
+    plan = schedule_plan(day, profile, config)
+    countdown = plan["countdown"]
+    if countdown and -3 <= countdown["days"] <= -1 and not debriefed(profile, countdown):
+        message = f"Interviewly: How did the {countdown['company']} interview go? → /interviewly:debrief"
+    else:
+        message = practice_nudge(day, plan)
+    if message:
+        write_atomic(marker, day.isoformat())
+    return message
 
 
 # ---------- incremental CV audit ----------
@@ -415,21 +901,36 @@ def section_name(line, marked, section, next_line):
 
 def cv_items(md):
     """The CV's claim lines (bullets and paragraph lines under a section) and its skills lines.
-    The first line is the name; contact lines before the first section are skipped."""
+    The first line is the name; contact lines before the first section are skipped. An indented line right after
+    a bullet continues it (a hard-wrapped bullet is one claim), and a line repeated under another role gets its
+    own id (c-<hash>-2)."""
     from ats_check import is_skills_section
-    lines = [l.strip() for l in md.splitlines()]
-    lines = [l for l in lines if l and not RULE_LINE.fullmatch(l)]
+    lines, indented, after_gap, gap = [], [], [], False
+    for raw in md.splitlines():
+        line = raw.strip()
+        if not line or RULE_LINE.fullmatch(line):
+            gap = True
+            continue
+        lines.append(line)
+        indented.append(raw[:1].isspace())
+        after_gap.append(gap)
+        gap = False
     marked = any(l.startswith("## ") for l in lines)
-    claims, skills, section, heading = [], [], None, None
+    found, skills, section, heading, last = [], [], None, None, None
 
     def claim(text, where, under):
-        claims.append({"id": claim_id(text), "text": plain_md(text), "section": where, "heading": under})
+        found.append({"text": text, "section": where, "heading": under})
+        return found[-1]
 
     for i, line in enumerate(lines):
         if i == 0 and not line.startswith("## "):
             continue  # the name
         bullet = BULLET.match(line)
         name = None if bullet else section_name(line, marked, section, lines[i + 1] if i + 1 < len(lines) else "")
+        if last is not None and indented[i] and not after_gap[i] and not bullet and name is None and not line.startswith("#"):
+            last["text"] += " " + line   # the bullet above, wrapped onto this line
+            continue
+        last = None
         if name is not None:
             section, heading = name, None
             continue
@@ -439,21 +940,28 @@ def cv_items(md):
         if section is None:  # under the name: contact lines are skipped, a summary paragraph or bullet is a claim
             if not bullet and ("@" in line or " | " in line or " · " in line or len(line.split()) < 10):
                 continue
-            claim(text, "Summary", None)
-            continue
-        if line.startswith("###"):
+            entry = claim(text, "Summary", None)
+        elif line.startswith("###"):
             heading = plain_md(line.lstrip("#"))
             continue
-        if not bullet and (WHOLE_BOLD.fullmatch(line) or (not marked and DATE_RANGE.search(line) and len(line.split()) <= 15)):
+        elif not bullet and (WHOLE_BOLD.fullmatch(line) or (not marked and DATE_RANGE.search(line) and len(line.split()) <= 15)):
             heading = plain_md(line)   # a role or project title
             continue
-        if not bullet and re.fullmatch(r"([*_])[^*_].*\1", line):
+        elif not bullet and re.fullmatch(r"([*_])[^*_].*\1", line):
             continue  # a stack line under a heading
-        if is_skills_section(section):
-            skills.append(plain_md(text))
+        elif is_skills_section(section):
+            skills.append({"text": text})
+            entry = skills[-1]
         else:
-            claim(text, section, heading)
-    return claims, skills
+            entry = claim(text, section, heading)
+        last = entry if bullet else None
+    claims, seen = [], {}
+    for c in found:
+        cid = claim_id(c["text"])
+        seen[cid] = seen.get(cid, 0) + 1
+        claims.append({"id": cid if seen[cid] == 1 else f"{cid}-{seen[cid]}", "text": plain_md(c["text"]),
+                       "section": c["section"], "heading": c["heading"]})
+    return claims, [plain_md(s["text"]) for s in skills]
 
 
 def read_cv():
@@ -568,11 +1076,22 @@ def audit_paths():
     return home() / "audit.json", home() / "audit.md"
 
 
-def mtime(path):
+def now_utc():
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def changed_since(path, stamp):
+    """Whether a file changed after an audit timestamp (always, when there's none). Timestamps carry their time
+    zone; older audits stored local time without one. Whole seconds, as the timestamps are."""
     try:
-        return dt.datetime.fromtimestamp(Path(path).stat().st_mtime).isoformat(timespec="seconds")
-    except FileNotFoundError:
-        return ""
+        changed = int(Path(path).stat().st_mtime) if path else None
+    except OSError:
+        changed = None
+    try:
+        since = dt.datetime.fromisoformat(stamp).timestamp() if isinstance(stamp, str) else None
+    except (ValueError, OverflowError, OSError):
+        since = None
+    return changed is not None and (since is None or changed > since)
 
 
 def cmd_audit_plan(args):
@@ -582,18 +1101,18 @@ def cmd_audit_plan(args):
     recheck, keep = [], 0
     for c in claims:
         entry = None if args.all else known.get(c["id"])
+        slug = safe_slug(entry.get("project")) if entry else None
         if entry is None:
             recheck.append(dict(c, reason="new or changed"))
-        elif entry.get("project") and mtime(home() / "projects" / f"{entry['project']}.md") > (entry.get("audited") or ""):
-            recheck.append(dict(c, reason="code analysis updated", project=entry["project"]))
+        elif slug and changed_since(home() / "projects" / f"{slug}.md", entry.get("audited")):
+            recheck.append(dict(c, reason="code analysis updated", project=slug))
         else:
             keep += 1
     audited = inline(store.get("audited"))
-    dossiers = [mtime(f) for f in (home() / "projects").glob("*.md")]
     skills_hash = hashlib.sha1("\n".join(skills).encode()).hexdigest()[:8]
     refresh = (bool(recheck) or args.all or skills_hash != store.get("skills_hash")
-               or any(m > audited for m in dossiers)
-               or any(mtime(f) > audited for f in (home() / "cv").glob("*/*-CV.md")))
+               or any(changed_since(f, audited) for f in (home() / "projects").glob("*.md"))
+               or any(changed_since(f, audited) for f in (home() / "cv").glob("*/*-CV.md")))
     groups = {}
     for c in recheck:
         groups.setdefault(c["heading"] or c["section"], []).append(c["id"])
@@ -652,27 +1171,28 @@ def cmd_audit_merge(args):
     json_path, md_path = audit_paths()
     claims, skills = cv_items(read_cv())
     current = {c["id"]: c for c in claims}
-    store = load_store()
-    now = dt.datetime.now().isoformat(timespec="seconds")
-    updated = 0
-    for part in args.parts:
-        assessed, overview = load_part(part)
-        for c in assessed:
-            cid = inline(c.get("id")) or claim_id(inline(c.get("text")))
-            if cid not in current:
-                print(f"skipped {cid}: not a line in cv.md (pass the id from audit-plan)", file=sys.stderr)
-                continue
-            fields = {k: v for k, v in c.items() if k not in ("id", "text")}
-            store["claims"][cid] = {**current[cid], **fields, "id": cid, "audited": now}
-            updated += 1
-        store["overview"].update({str(k): markdown_block(v) for k, v in overview.items() if v not in (None, "", [], {})})
-    store["claims"] = {k: v for k, v in store["claims"].items() if k in current}
-    missing = [c["id"] for c in claims if c["id"] not in store["claims"]]
-    store["skills_hash"] = hashlib.sha1("\n".join(skills).encode()).hexdigest()[:8]
-    store["audited"] = now
-    page = render_audit(store, today().isoformat())   # before saving: a part that can't render mustn't poison audit.json
-    save_json(json_path, store)
-    md_path.write_text(page, encoding="utf-8")
+    parts = [(part, *load_part(part)) for part in args.parts]
+    with state_lock():
+        store = load_store()
+        now = now_utc()
+        updated = 0
+        for part, assessed, overview in parts:
+            for c in assessed:
+                cid = inline(c.get("id")) or claim_id(inline(c.get("text")))
+                if cid not in current:
+                    print(f"skipped {cid}: not a line in cv.md (pass the id from audit-plan)", file=sys.stderr)
+                    continue
+                fields = {k: v for k, v in c.items() if k not in ("id", "text")}
+                store["claims"][cid] = {**current[cid], **fields, "id": cid, "audited": now}
+                updated += 1
+            store["overview"].update({str(k): markdown_block(v) for k, v in overview.items() if v not in (None, "", [], {})})
+        store["claims"] = {k: v for k, v in store["claims"].items() if k in current}
+        missing = [c["id"] for c in claims if c["id"] not in store["claims"]]
+        store["skills_hash"] = hashlib.sha1("\n".join(skills).encode()).hexdigest()[:8]
+        store["audited"] = now
+        page = render_audit(store, today().isoformat())   # before saving: a part that can't render mustn't poison audit.json
+        save_json(json_path, store)
+        write_atomic(md_path, page)
     count = {r: sum(c.get("risk") == r for c in store["claims"].values()) for r in RISK_ORDER}
     print(json.dumps({"updated": updated, "claims": len(store["claims"]), **count, "not_assessed": missing}))
     if missing:
@@ -685,16 +1205,23 @@ def cmd_home(args):
     print(home())
 
 
+def cmd_stamp(args):
+    if args.mode is not None and not SLUG.fullmatch(args.mode):
+        sys.exit(f"stamp: {args.mode!r} isn't a mode name like drill or deep-dive")
+    stamp = f"{today().isoformat()}-{dt.datetime.now():%H%M}"
+    print(f"{stamp}-{args.mode}" if args.mode else stamp)
+
+
 def cmd_due(args):
     day = today()
-    picked = pick_due(load_topics(), day, args.limit, args.match, args.fill, args.new)
+    picked = pick_due(usable(load_topics()["topics"]), day, schedule_plan(day), args.limit, args.match, args.fill, args.new)
     if args.json:
         print(json.dumps(picked, indent=2, ensure_ascii=False))
         return
     for t in picked:
         score = "new" if t["kind"] == "new" else f"{t['last_score']}/4"
         when = "today's new topic" if t["kind"] == "new" else f"due {t.get('next_due')}"
-        print(f"{t['id']}\t{score}\t{when}\t{t.get('label', '')}")
+        print(f"{t['id']}\t{score}\t{when}\t{t.get('label') or ''}")
     print(f"{len(picked)} topic(s)", file=sys.stderr)
 
 
@@ -705,40 +1232,44 @@ def read_stdin():
 
 
 def cmd_seed(args):
+    where = args.file or "standard input"
     try:
-        incoming = json.loads(read_stdin())
+        incoming = json.loads(read_input(args.file))
     except ValueError as e:
-        sys.exit(f"seed: standard input isn't valid UTF-8 JSON: {e}")
-    if isinstance(incoming, dict):
-        incoming = incoming.get("topics", [])
+        sys.exit(f"seed: {where} isn't valid UTF-8 JSON: {e}")
+    if isinstance(incoming, dict):   # {"topics": [...]}, or one topic on its own
+        incoming = incoming["topics"] if "topics" in incoming else [incoming]
     if not isinstance(incoming, list):
-        sys.exit("seed: expected a JSON list of topics on standard input")
-    data, day = load_topics(), today()
-    known = {t.get("id") for t in data["topics"] if isinstance(t, dict)}
-    added = 0
-    for t in incoming:
-        if not isinstance(t, dict) or not t.get("id") or t["id"] in known:
-            continue
-        data["topics"].append({"id": t["id"], "label": t.get("label") or t["id"], "skill": t.get("skill"),
-                               "project": t.get("project"), "question": t.get("question"),
-                               "answer_hint": t.get("answer_hint"), "last_score": None, "interval_days": 0,
-                               "next_due": day.isoformat(), "history": []})
-        known.add(t["id"])
-        added += 1
-    save_json(topics_path(), data)
-    print(f"added {added}, skipped {len(incoming) - added} (already known or no id)")
-
-
-def cmd_score(args):
-    data = load_topics()
-    fields = {"label": args.label, "question": args.question, "answer_hint": args.answer_hint,
-              "skill": args.skill, "project": args.project}
-    try:
-        topic = record_score(data, args.id, args.score, args.source, fields, today())
-    except ValueError as e:
-        sys.exit(str(e))
-    save_json(topics_path(), data)
-    print(json.dumps({k: topic[k] for k in ("id", "last_score", "interval_days", "next_due")}))
+        sys.exit(f"seed: expected a JSON list of topics in {where}")
+    day = today()
+    added = no_id = 0
+    with state_lock():
+        data = load_topics()
+        known = {t.get("id") for t in data["topics"] if isinstance(t, dict)}
+        ids = [text_or_none(t.get("id")) if isinstance(t, dict) else None for t in incoming]
+        for topic_id in ids:   # all or nothing: a bad new id stops the seed before anything is saved
+            if topic_id and topic_id not in known:
+                try:
+                    check_new_id(topic_id)
+                except ValueError as e:
+                    sys.exit(f"seed: {e}")
+        for t, topic_id in zip(incoming, ids):
+            if not topic_id:
+                no_id += 1
+                continue
+            if topic_id in known:
+                continue
+            data["topics"].append({"id": topic_id, "label": inline(t.get("label")) or topic_id,
+                                   "skill": text_or_none(t.get("skill")), "project": text_or_none(t.get("project")),
+                                   "question": inline(t.get("question")) or None,
+                                   "answer_hint": inline(t.get("answer_hint")) or None, "last_score": None,
+                                   "interval_days": 0, "next_due": day.isoformat(), "history": []})
+            known.add(topic_id)
+            added += 1
+        if added:
+            save_topics(data)
+    print(f"added {added}, skipped {len(incoming) - added - no_id} already known"
+          + (f" and {no_id} without a text id" if no_id else ""))
 
 
 def whole_score(value):
@@ -748,34 +1279,138 @@ def whole_score(value):
     return int(n) if n is not None and n == int(n) and 1 <= n <= 4 else None
 
 
-def cmd_apply(args):
-    path = Path(args.session)
-    review = read_json_arg(path)
-    data, day = load_topics(), today()
-    source = review.get("session") or f"sessions/{path.with_suffix('.md').name}"
-    scheduled = []
-    threads = review.get("threads")
-    for thread in threads if isinstance(threads, list) else []:
-        if not isinstance(thread, dict) or not thread.get("topic") or thread.get("score") in (None, ""):
-            continue
-        thread = dict(thread, topic=str(thread["topic"]))
-        score = whole_score(thread["score"])
+def score_items(args):
+    """What a `score` command asks to record, all checked before anything is saved: [(id, score, source, fields)]."""
+    if not (args.stdin or args.file):
+        if args.id is None or args.score is None or not args.source:
+            sys.exit("score: give ID SCORE --source FILE, or the scores as JSON with --stdin or --file PATH")
+        return [(args.id, args.score, args.source, {k: getattr(args, k) for k in SCORE_FIELDS})]
+    if args.id is not None or args.score is not None:
+        sys.exit("score: with --stdin or --file, put every score in the JSON, not on the command line")
+    try:
+        items = json.loads(read_input(args.file))
+    except ValueError as e:
+        sys.exit(f"score: {args.file or 'standard input'} isn't valid UTF-8 JSON: {e}")
+    out = []
+    for n, item in enumerate(items if isinstance(items, list) else [items], 1):
+        if not isinstance(item, dict):
+            sys.exit(f"score: item {n} isn't a JSON object")
+        topic_id, score = text_or_none(item.get("id")), whole_score(item.get("score"))
+        source = text_or_none(item.get("source")) or args.source
+        where = f"score: item {n} ({topic_id})"
+        if not topic_id:
+            sys.exit(f"score: item {n} has no id")
         if score is None:
-            print(f"skipped {thread['topic']}: its score {thread['score']!r} isn't a whole number from 1 to 4",
-                  file=sys.stderr)
-            continue
-        fields = {"label": thread.get("label"), "question": thread.get("question"),
-                  "answer_hint": thread.get("answer_hint"), "skill": thread.get("skill"),
-                  "project": thread.get("project")}
-        existing = next((t for t in data["topics"] if t.get("id") == thread["topic"]), None)
-        if existing and any(h.get("source") == source for h in existing.get("history", [])):
-            topic = existing  # already applied from this session: don't count the same answer twice
-        else:
-            topic = record_score(data, thread["topic"], score, source, fields, day)
-        scheduled.append({"topic": topic["id"], "score": topic["last_score"], "next_due": topic["next_due"]})
-    save_json(topics_path(), data)
-    review["scheduled"] = scheduled
-    save_json(path, review)
+            sys.exit(f"{where}: its score {item.get('score')!r} isn't a whole number from 1 to 4")
+        if not source:
+            sys.exit(f"{where} has no source (the session or debrief file the score comes from)")
+        bad = [k for k in SCORE_FIELDS if item.get(k) is not None and not isinstance(item[k], str)]
+        if bad:
+            sys.exit(f"{where}: {', '.join(bad)} should be text")
+        out.append((topic_id, score, source, {k: item.get(k) for k in SCORE_FIELDS}))
+    if not out:
+        sys.exit("score: the JSON holds no scores")
+    return out
+
+
+def cmd_score(args):
+    items = score_items(args)
+    day = today()
+    lines = []
+    with state_lock():
+        data = load_topics()
+        plan = schedule_plan(day)
+        for topic_id, score, source, fields in items:
+            try:
+                topic = record_score(data, topic_id, score, source, fields, day, plan)
+            except ValueError as e:
+                sys.exit(f"score: {e}")
+            lines.append(json.dumps({k: topic[k] for k in ("id", "last_score", "interval_days", "next_due")},
+                                    ensure_ascii=False))
+        save_topics(data)
+    print("\n".join(lines))
+
+
+def thread_number(value):
+    """A thread number as an int: 2, 2.0, "2" and "Q2" all count."""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    m = re.fullmatch(r"\s*[Qq#]?\s*(\d+)\s*", str(value))
+    return int(m.group(1)) if m else None
+
+
+def capped_threads(review):
+    """{thread number: flag type} for the threads a bluff or contradicts-code flag names: they score at most 2."""
+    capped = {}
+    flags = review.get("flags")
+    for flag in flags if isinstance(flags, list) else []:
+        kind = inline(flag.get("type")).strip().lower() if isinstance(flag, dict) else ""
+        if kind in CAPPING_FLAGS:
+            threads = flag.get("thread")
+            for n in threads if isinstance(threads, list) else [threads]:
+                if thread_number(n) is not None:
+                    capped.setdefault(thread_number(n), kind)
+    return capped
+
+
+def score_before(topic, source):
+    """(the topic's last score before this source first scored it, whether this source already has)."""
+    previous = None
+    for h in (topic or {}).get("history") or []:
+        if isinstance(h, dict):
+            if norm_source(h.get("source")) == source:
+                return previous, True
+            previous = h.get("score")
+    return previous, False
+
+
+def cmd_apply(args):
+    path = session_path(args.session)
+    day = today()
+    with state_lock():
+        review = read_json_arg(path)
+        data = load_topics()
+        plan = schedule_plan(day)
+        session = review.get("session")
+        source = norm_source(session if isinstance(session, str) and session.strip()
+                             else f"sessions/{path.with_suffix('.md').name}")
+        capped = capped_threads(review)
+        scheduled = []
+        threads = review.get("threads")
+        for position, thread in enumerate(threads if isinstance(threads, list) else [], 1):
+            if not isinstance(thread, dict) or not thread.get("topic") or thread.get("score") in (None, ""):
+                continue
+            thread = dict(thread, topic=str(thread["topic"]).strip())
+            score = whole_score(thread["score"])
+            if score is None:
+                print(f"skipped {thread['topic']}: its score {thread['score']!r} isn't a whole number from 1 to 4",
+                      file=sys.stderr)
+                continue
+            n = thread_number(thread.get("n"))
+            n = position if n is None else n      # a thread without "n" is numbered by its place in the list
+            flag = capped.get(n)
+            if flag and score > 2:
+                print(f"capped {thread['topic']} at 2, not {score}: thread {n} has a {flag} flag, and "
+                      "the rubric scores a bluffed answer 2 at most", file=sys.stderr)
+                score = 2
+            existing = next((t for t in data["topics"] if isinstance(t, dict) and t.get("id") == thread["topic"]), None)
+            previous, applied = score_before(existing, source)
+            if applied:
+                topic = existing  # already applied from this session: don't count the same answer twice
+            else:
+                try:
+                    topic = record_score(data, thread["topic"], score, source, {k: thread.get(k) for k in SCORE_FIELDS},
+                                         day, plan)
+                except ValueError as e:   # a new topic id iv can't use
+                    print(f"skipped {thread['topic']}: {e}", file=sys.stderr)
+                    continue
+            scheduled.append({"topic": topic["id"], "score": topic["last_score"], "next_due": topic["next_due"],
+                              "previous_score": previous})
+        save_topics(data)
+        review["scheduled"] = scheduled
+        save_json(path, review)
     print(json.dumps(scheduled, indent=2))
 
 
@@ -790,34 +1425,70 @@ def cmd_stats(args):
     if args.json:
         print(json.dumps(stats, indent=2, ensure_ascii=False))
         return
-    print(f"overall readiness: {stats['overall']}  reviews due: {stats['due_today']}  "
-          f"new today: {stats['new_today']} ({stats['new_waiting']} waiting)  streak: {stats['streak']['current']}")
+    cov = stats["coverage"]
+    practised = f"{cov['tested']} of {cov['total']} topics practised"
+    if stats["overall"] is None or cov["tested"] < cov["total"] / 4:
+        print(f"readiness: not enough practice yet to give a score ({practised})")
+    else:
+        print(f"readiness: {stats['overall']}/100 · {practised} (mastery {stats['mastery']}/100)")
+    print(f"reviews due: {stats['due_today']}  new today: {stats['new_today']} ({stats['new_waiting']} waiting)  "
+          f"streak: {stats['streak']['current']}")
     for s in stats["skills"]:
-        print(f"  {s['name']:<24} {s['readiness'] if s['readiness'] is not None else '—':>4}  "
+        print(f"  {s['name'] or s['slug'] or '?':<24} {s['readiness'] if s['readiness'] is not None else '—':>4}  "
               f"{s['tested']}/{s['total']} tested  {s['due']} due  {s['status']}")
 
 
 def cmd_nudge(args):
+    """Never prints an error: it runs at the start of every session. A failure goes to .nudge-error for `iv check`."""
+    global QUIET
+    QUIET = True
     try:
-        message = nudge_message(today())
+        check_home()
     except Exception:
         return
+    marker = home() / ".nudge-error"
+    try:
+        message = nudge_message(today())
+    except Exception as e:
+        with contextlib.suppress(Exception):
+            if home().is_dir():
+                write_atomic(marker, f"{dt.date.today().isoformat()} {type(e).__name__}: {e}\n")
+        return
+    with contextlib.suppress(OSError):
+        if marker.exists():
+            marker.unlink()
     if message:
         print(json.dumps({"systemMessage": message}))
 
 
+def focus_slugs(focus):
+    """A review's focus as slugs: "taskly", ["taskly", "clipper"] and {"project": "taskly"} all work."""
+    if isinstance(focus, dict):
+        focus = focus.get("project") or focus.get("skill")
+    return [s.strip() for s in (focus if isinstance(focus, (list, tuple)) else [focus]) if isinstance(s, str) and s.strip()]
+
+
 def with_focus_name(review):
-    """Add the display name of the session's project or skill, for the HTML pages."""
-    focus = review.get("focus")
-    names = {p.get("slug"): p.get("name") for p in load_json(home() / "projects" / "index.json", [])}
-    names.update({s.get("slug"): s.get("name") for s in load_json(home() / "profile.json", {}).get("skills", [])})
-    return {**review, "focus_name": names.get(focus) or focus}
+    """The review with its focus as text and the display name of its project(s) or skill(s), for the HTML pages."""
+    names = {p["slug"]: p["name"] for p in load_index()}
+    names.update({s["slug"]: s["name"] for s in load_profile()["skills"]})
+    slugs = focus_slugs(review.get("focus"))
+    return {**review, "focus": ", ".join(slugs) or None,
+            "focus_name": ", ".join(names.get(s) or s for s in slugs) or None}
+
+
+def public_focus(review):
+    """Whether the share image may name the session's project: only when every focus is a project whose index entry
+    says "public": true (setup sets it only when GitHub says the repo is public). A repo_url alone isn't enough:
+    private repos have one too."""
+    public = {p["slug"] for p in load_index() if p.get("public") is True}
+    slugs = focus_slugs(review.get("focus"))
+    return bool(slugs) and all(s in public for s in slugs)
 
 
 def write_page(name, html_text, should_open):
     out = home() / "reports" / name
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html_text, encoding="utf-8")
+    write_atomic(out, html_text)
     print(out)
     if should_open:
         import webbrowser
@@ -827,7 +1498,7 @@ def write_page(name, html_text, should_open):
 
 def cmd_report(args):
     import render
-    path = Path(args.session)
+    path = session_path(args.session)
     review = with_focus_name(read_json_arg(path))
     write_page(f"{path.stem}.html", render.report_card(review, streak_info(today())), args.open)
 
@@ -839,9 +1510,10 @@ def cmd_dashboard(args):
 
 def cmd_share(args):
     import render
-    path = Path(args.session)
-    review = with_focus_name(read_json_arg(path))
-    page = write_page(f"{path.stem}-share.html", render.share_card(review, streak_info(today())), False)
+    path = session_path(args.session)
+    review = read_json_arg(path)
+    card = render.share_card(with_focus_name(review), streak_info(today()), show_focus=public_focus(review))
+    page = write_page(f"{path.stem}-share.html", card, False)
     png = render.screenshot(page, page.with_suffix(".png"), 1200, 630)
     if png:
         print(png)
@@ -871,7 +1543,7 @@ def is_iso_date(value):
 
 
 def topic_problem(t):
-    """Why `due` or `score` would trip over this topic, or None."""
+    """Why `due`, `score` or `stats` would trip over this topic, or None."""
     if not isinstance(t, dict):
         return "not a JSON object"
     if not t.get("id") or not isinstance(t["id"], str):
@@ -882,34 +1554,110 @@ def topic_problem(t):
         return "no next_due"
     if not is_iso_date(t["next_due"]):
         return f"next_due is {t['next_due']!r}, not a YYYY-MM-DD date"
+    interval = t.get("interval_days")
+    if interval is not None and (isinstance(interval, bool) or not isinstance(interval, int) or interval < 0):
+        return f"interval_days is {interval!r}, not a whole number of days"
+    for key in ("skill", "project"):
+        if t.get(key) is not None and not isinstance(t[key], str):
+            return f"{key} is {t[key]!r}, not a slug or null"
+    if not isinstance(t.get("history", []), list):
+        return "history isn't a list"
     return None
 
 
+def shape_problems(name, data):
+    """What's wrong with the shape of profile.json, projects/index.json or config.json, as lines for `iv check`."""
+    out = []
+    if name == "profile.json":
+        if not isinstance(data, dict):
+            return ["bad profile.json: expected a JSON object"]
+        skills = data.get("skills", [])
+        if not isinstance(skills, list):
+            out.append("bad profile.json: skills should be a list of objects")
+        for i, s in enumerate(skills if isinstance(skills, list) else [], 1):
+            if not isinstance(s, dict):
+                out.append(f"bad profile.json: skill #{i} is {short(repr(s), 40)}, not an object with name, slug and status")
+            elif not text_or_none(s.get("slug")):
+                out.append(f"bad profile.json: skill #{i} ({s.get('name')!r}) has no slug")
+        target = data.get("active_target")
+        if target is not None and not safe_slug(target):
+            out.append(f"bad profile.json: active_target {target!r} isn't a file name in targets/")
+    elif name == "projects/index.json":
+        if not isinstance(data, list):
+            return ["bad projects/index.json: expected a JSON list of projects"]
+        for i, p in enumerate(data, 1):
+            if not isinstance(p, dict):
+                out.append(f"bad projects/index.json: #{i} is {short(repr(p), 40)}, not an object")
+            elif not safe_slug(p.get("slug")):
+                out.append(f"bad projects/index.json: #{i} has slug {p.get('slug')!r}, not a kebab-case slug")
+            elif "public" in p and not isinstance(p["public"], bool):
+                out.append(f"bad projects/index.json: #{i} has public {p['public']!r}, not true or false")
+    elif name == "config.json":
+        if not isinstance(data, dict):
+            return ["bad config.json: expected a JSON object"]
+        for key, low in (("new_per_day", 0), ("max_interval_days", 1)):
+            value = data.get(key)
+            if key in data and (isinstance(value, bool) or not isinstance(value, int) or value < low):
+                out.append(f"bad config.json: {key} is {value!r}, not a whole number of at least {low}")
+        if "nudge" in data and not isinstance(data["nudge"], bool):
+            out.append(f"bad config.json: nudge is {data['nudge']!r}, not true or false")
+    return out
+
+
 def cmd_check(args):
-    problems, topics_read = 0, True
+    problems = []
+
+    def problem(text):
+        problems.append(text)
+        print(text)
+
     root = home()
+    parsed = {}
     for f in json_files(root):
         try:
-            json.loads(read_text(f))
+            parsed[f] = json.loads(read_text(f))
         except (ValueError, OSError) as e:
-            problems += 1
-            print(f"invalid JSON: {f}: {e}")
-            topics_read = topics_read and f != topics_path()
-    if topics_read and topics_path().exists():
-        data = load_json(topics_path(), {})
-        topics = data.get("topics") if isinstance(data, dict) else None
-        if not isinstance(topics, list):
-            problems += 1
-            print(f'bad topics.json: expected {{"version": 1, "topics": [...]}}')
-            topics = []
-        for i, t in enumerate(topics, 1):
+            problem(f"invalid JSON: {f}: {e}")
+    for name in ("profile.json", "projects/index.json", "config.json"):
+        if root / name in parsed:
+            for line in shape_problems(name, parsed[root / name]):
+                problem(line)
+    if topics_path() in parsed:
+        data = parsed[topics_path()]
+        topics = data if isinstance(data, list) else data.get("topics") if isinstance(data, dict) else None
+        if not isinstance(data, dict) or not isinstance(topics, list):
+            problem('bad topics.json: expected {"version": 1, "topics": [...]}')
+        for i, t in enumerate(topics if isinstance(topics, list) else [], 1):
             issue = topic_problem(t)
             if issue:
-                problems += 1
                 name = t.get("id") if isinstance(t, dict) and isinstance(t.get("id"), str) and t.get("id") else f"#{i}"
-                print(f"bad topic: {name}: {issue}")
-    print("ok" if not problems else f"{problems} problem(s)")
+                problem(f"bad topic: {name}: {issue}")
+    elif topics_path().exists() and (root / "topics.json.bak").exists():
+        print("note: until topics.json is fixed, iv reads topics.json.bak (the version before the last change); "
+              "the next score or seed rewrites topics.json from it")
+    for folder in ("sessions", "debriefs"):
+        for f in sorted((root / folder).glob("*")):
+            m = DATE_PREFIX.match(f.name)
+            if m and not file_day(f.name):
+                problem(f"bad file name: {folder}/{f.name}: {m.group(1)} isn't a real date")
+    marker = root / ".nudge-error"
+    if marker.exists():
+        print(f"note: the start-of-session reminder failed ({read_text(marker, errors='ignore').strip()}); "
+              "it tries again at the next session")
+    print("ok" if not problems else f"{len(problems)} problem(s)")
     sys.exit(1 if problems else 0)
+
+
+def count_arg(low):
+    def parse(value):
+        try:
+            number = int(value)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"expected a whole number, got {value!r}") from None
+        if number < low:
+            raise argparse.ArgumentTypeError(f"must be {low} or more, got {number}")
+        return number
+    return parse
 
 
 def main():
@@ -917,20 +1665,30 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("home").set_defaults(fn=cmd_home)
+    c = sub.add_parser("stamp")
+    c.add_argument("mode", nargs="?", help="appended to the stamp: drill, deep-dive, learn…")
+    c.set_defaults(fn=cmd_stamp)
     d = sub.add_parser("due")
-    d.add_argument("--limit", type=int)
+    d.add_argument("--limit", type=count_arg(1))
     d.add_argument("--match")
-    d.add_argument("--fill", action="store_true")
-    d.add_argument("--new", type=int, help="how many new topics to include (default: what's left of today's allowance)")
+    d.add_argument("--fill", action="store_true", help="top the queue up to --limit with the weakest practised topics")
+    d.add_argument("--new", type=count_arg(0), help="how many new topics to include (default: what's left of today's allowance)")
     d.add_argument("--json", action="store_true")
     d.set_defaults(fn=cmd_due)
-    sub.add_parser("seed").set_defaults(fn=cmd_seed)
+    c = sub.add_parser("seed")
+    c.add_argument("--file", help="read the JSON list from this file instead of standard input")
+    c.set_defaults(fn=cmd_seed)
     s = sub.add_parser("score")
-    s.add_argument("id")
-    s.add_argument("score", type=int)
-    s.add_argument("--source", required=True)
-    for opt in ("label", "question", "answer-hint", "skill", "project"):
+    s.add_argument("id", nargs="?")
+    s.add_argument("score", nargs="?", type=int)
+    s.add_argument("--source", help="the session or debrief file the score comes from (the default for JSON items)")
+    given = s.add_mutually_exclusive_group()
+    given.add_argument("--stdin", action="store_true", help="read the scores as JSON from standard input")
+    given.add_argument("--file", help="read the scores as JSON from this file")
+    for opt in ("skill", "project"):
         s.add_argument(f"--{opt}")
+    for opt in ("label", "question", "answer-hint"):   # kept for older callers: free text belongs in the JSON
+        s.add_argument(f"--{opt}", help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_score)
     a = sub.add_parser("apply")
     a.add_argument("session")
@@ -956,7 +1714,15 @@ def main():
     c.add_argument("parts", nargs="+")
     c.set_defaults(fn=cmd_audit_merge)
     args = p.parse_args()
-    args.fn(args)
+    if args.command == "due" and args.fill and not args.limit:
+        d.error("--fill needs --limit N: it tops the queue up to N")
+    if args.command == "nudge":
+        return cmd_nudge(args)
+    try:
+        check_home()
+        args.fn(args)
+    except StateError as e:
+        sys.exit(str(e))
 
 
 if __name__ == "__main__":

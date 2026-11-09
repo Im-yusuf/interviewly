@@ -6,6 +6,8 @@ Page 1 has:
   - "Built APIs" in Helvetica-Bold, then " with FastAPI" in Helvetica
   - "sam@example.com" with a link annotation listed on the page
   - a link over "FastAPI" that no page lists in /Annots (what some editors save)
+
+runs_pdf() and columns_pdf() draw text at given places, for layout tests (sidebars, date columns).
 """
 import zlib
 
@@ -58,6 +60,43 @@ BT /F3 10 Tf 72 760 Td (sam@example.com) Tj ET"""
 # Ten more lines, so the page has as much text as a real CV needs to pass the text-layer check
 FILLER = b"\n".join(b"BT /F3 10 Tf 72 %d Td (Built and shipped a service for line %d of this test) Tj ET"
                     % (700 - 12 * i, i) for i in range(10))
+
+
+HELVETICA = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+
+
+def page(content, resources=b"/Font << /F1 5 0 R >>", extra=()):
+    """A one-page PDF: objects 1-4 are the catalog, page tree, page and content; 5 is Helvetica; extra follow."""
+    return build([b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                  b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << "
+                  + resources + b" >> >>", stream(content), HELVETICA] + list(extra))
+
+
+def runs_pdf(runs):
+    """A page drawing each (x, y, size, text) in Helvetica, where every character is half an em wide."""
+    def literal(text):
+        return text.encode("cp1252").replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
+    return page(b"\n".join(b"BT /F1 %g Tf %g %g Td (%s) Tj ET" % (size, x, y, literal(text)) for x, y, size, text in runs))
+
+
+SIDEBAR = ["CONTACT", "sam@example.com", "+44 7700 900123", "London, UK", "", "SKILLS", "Python", "Django", "FastAPI",
+           "PostgreSQL", "Docker", "", "EDUCATION", "BSc Computer Science", "Northbridge University", "2021 - 2024"]
+MAIN = ["Sam Rivera", "Backend Developer", "", "EXPERIENCE", "Junior Backend Developer, Brightline Media",
+        "Sep 2024 - Present", "Maintained internal Django services used by the",
+        "40-person content team and moved the reporting", "service from cron scripts to Celery, cutting report",
+        "delivery time from 6 hours to 20 minutes.", "", "PROJECTS", "Taskly API",
+        "Built a task-management REST API with FastAPI,", "SQLAlchemy and PostgreSQL; reduced p95 latency",
+        "by 60% by moving database access to async.", "Clipper", "Built an automated highlight-clip generator",
+        "with FFmpeg and Python."]
+
+
+def columns_pdf(left=SIDEBAR, right=MAIN, left_at=(40, 9, 14), right_at=(220, 10, 14), top=780, header=None):
+    """Two columns, each (x, font size, line spacing), from the same top; "" leaves a line empty.
+    header: a line drawn across both columns above them."""
+    runs = [(150, top + 30, 16, header)] if header else []
+    for lines, (x, size, lead) in ((left, left_at), (right, right_at)):
+        runs += [(x, top - lead * i, size, text) for i, text in enumerate(lines) if text]
+    return runs_pdf(runs)
 
 
 def sample_pdf(content=CONTENT, encrypted=False):
