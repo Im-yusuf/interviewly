@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,17 @@ SAM = ("Sam Rivera", "sam@example.com")
 ALEX = ("Alex Chen", "alex@example.com")
 
 
+def remove_tree(path):
+    """shutil.rmtree that also deletes read-only files, which git makes its objects on Windows."""
+    def clear_and_retry(func, target, *_):
+        os.chmod(target, stat.S_IWRITE)
+        func(target)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=clear_and_retry)
+    else:
+        shutil.rmtree(path, onerror=clear_and_retry)
+
+
 @unittest.skipUnless(shutil.which("git"), "git not installed")
 class ProvenanceTest(unittest.TestCase):
     def setUp(self):
@@ -32,7 +44,7 @@ class ProvenanceTest(unittest.TestCase):
         self.git("init", "-q")
 
     def tearDown(self):
-        shutil.rmtree(self.tmp)
+        remove_tree(self.tmp)
 
     def git(self, *args, author=None, cwd=None, input=None, check=True):
         env = dict(os.environ)

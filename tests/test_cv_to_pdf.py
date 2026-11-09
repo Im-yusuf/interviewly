@@ -328,7 +328,8 @@ class BuiltInWriterTest(unittest.TestCase):
         result, out = self.build("--max-pages", "1")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("made with built-in writer", result.stdout)
-        report = ats_check.analyse(out, source=self.src, max_pages=1)
+        # extra_parsers=False: the result mustn't depend on which pdftotext build a machine happens to have
+        report = ats_check.analyse(out, source=self.src, max_pages=1, extra_parsers=False)
         checks = {r["check"]: r for r in report["results"]}
         for name in ("text", "characters", "fonts", "links", "pages", "layout", "fidelity", "bold", "document"):
             self.assertEqual(checks[name]["status"], "pass", f"{name}: {checks[name]['detail']}")

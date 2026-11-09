@@ -386,7 +386,8 @@ def analyse(repo, me=(), subdir=None, top=25, max_commits=MAX_COMMITS):
                                       "--filter, then run this again")
         elif missing:
             fix = "re-clone it with --filter=blob:limit=1m"
-            if re.fullmatch(r"[\w./ ~:+,=@-]+", str(root)) and re.fullmatch(r"[\w.-]+", remote):  # safe to paste
+            safe = r"[\w./\\ ~:+,=@-]+" if os.name == "nt" else r"[\w./ ~:+,=@-]+"   # Windows paths use backslashes
+            if re.fullmatch(safe, str(root)) and not str(root).endswith("\\") and re.fullmatch(r"[\w.-]+", remote):
                 fix = (f'run git -C "{root}" config remote.{remote}.partialclonefilter blob:limit=1m && '
                        f'git -C "{root}" fetch --refetch {remote} (git 2.36+), or {fix}')
             count_lines = False

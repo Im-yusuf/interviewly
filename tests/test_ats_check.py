@@ -214,14 +214,17 @@ class AtsCheckTest(unittest.TestCase):
         build = subprocess.run([sys.executable, str(ROOT / "scripts" / "cv_to_pdf.py"), str(src), str(pdf), "--max-pages", "1",
                                 "--engine", engine], capture_output=True, encoding="utf-8")
         self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
-        report = ats_check.analyse(pdf, ["Python", "PostgreSQL"], source=src, max_pages=1)
+        # extra_parsers=False: the result mustn't depend on which pdftotext build a machine happens to have
+        report = ats_check.analyse(pdf, ["Python", "PostgreSQL"], source=src, max_pages=1, extra_parsers=False)
         checks = self.by_check(report)
         self.assertEqual(report["fails"], 0, report)
         for name in ("reading order", "text", "characters", "fonts", "links", "pages", "layout", "fidelity", "bold", "document"):
             if name in checks:
                 self.assertEqual(checks[name]["status"], "pass", f"{name}: {checks[name]['detail']}")
         self.assertNotIn("reading order", checks)
-        if sys.platform == "darwin" and ats_check.other_parsers(pdf):   # Preview, Spotlight and copy-paste read it in order
+        if sys.platform == "darwin" and "macOS PDFKit" in ats_check.other_parsers(pdf):   # Preview, Spotlight and copy-paste read it in order
+            checks = self.by_check(ats_check.analyse(pdf, ["Python", "PostgreSQL"], source=src, max_pages=1))
+            self.assertEqual(checks["characters"]["status"], "pass", checks["characters"]["detail"])
             self.assertIn("in macOS PDFKit", checks["characters"]["detail"])
 
         # a link dropped from the PDF is caught against the source
