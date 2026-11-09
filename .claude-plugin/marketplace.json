@@ -1,0 +1,17 @@
+{
+  "name": "interviewly",
+  "description": "You built it. Now explain it. Interview prep grounded in your CV and your real code.",
+  "owner": {
+    "name": "Im-yusuf",
+    "url": "https://github.com/Im-yusuf"
+  },
+  "plugins": [
+    {
+      "name": "interviewly",
+      "source": "./",
+      "description": "Interview prep that reads your CV and your real code: mock interviews with real follow-ups, project study guides, walkthrough practice, an honest CV check and daily drills. Built it with AI? Learn it well enough to explain it.",
+      "category": "productivity",
+      "homepage": "https://github.com/Im-yusuf/interviewly"
+    }
+  ]
+}

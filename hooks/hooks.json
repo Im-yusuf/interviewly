@@ -1,0 +1,17 @@
+{
+  "description": "Once a day, when a new session starts, shows a one-line reminder if there's something to practise. Silent otherwise, and silent until Interviewly is set up; never adds anything to the model's context.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

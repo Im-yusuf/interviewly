@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: interview-coach-skip-teaches
+context:
+  scaffold_script: scaffold.sh

@@ -1,0 +1,189 @@
+<!doctype html>
+<!--
+  Source for docs/demo.png (the README hero image). The exchange is real output from
+  the example projects. Re-render with:
+
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --hide-scrollbars --force-device-scale-factor=2 --default-background-color=00000000 \
+    --window-size=1280,660 --screenshot=docs/demo.png "file://$PWD/docs/demo-card.html"
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Interviewly demo card</title>
+<style>
+  :root {
+    --bg: #15161a;
+    --panel: #1b1d22;
+    --line: rgba(255, 255, 255, 0.08);
+    --text: #ececef;
+    --muted: #8d93a0;
+    --soft: #b8bec9;
+    --accent: #d97757;
+    --code: #f2c48d;
+    --amber: #e3b341;
+    --red: #f47067;
+    --green: #6bc46d;
+    --blue: #6cb6ff;
+    --ui: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: transparent; }
+  body { padding: 36px 40px 44px; font-family: var(--ui); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  .window {
+    width: 1200px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.2);
+  }
+  .titlebar {
+    height: 46px; display: flex; align-items: center; padding: 0 18px;
+    border-bottom: 1px solid var(--line); position: relative;
+  }
+  .dots { display: flex; gap: 8px; }
+  .dots span { width: 12px; height: 12px; border-radius: 50%; }
+  .dots span:nth-child(1) { background: #ff5f57; }
+  .dots span:nth-child(2) { background: #febc2e; }
+  .dots span:nth-child(3) { background: #28c840; }
+  .title {
+    position: absolute; left: 0; right: 0; text-align: center;
+    font-size: 13px; color: var(--muted); letter-spacing: 0.01em;
+  }
+  .title b { color: var(--soft); font-weight: 600; }
+
+  .body { display: grid; grid-template-columns: 1fr 400px; }
+
+  .chat { padding: 26px 34px 30px; display: flex; flex-direction: column; gap: 20px; }
+  .prompt { font-family: var(--mono); font-size: 14px; color: var(--muted); }
+  .prompt .caret { color: var(--accent); margin-right: 8px; }
+  .prompt .cmd { color: var(--text); }
+
+  .msg .who {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .msg .who small { font-weight: 500; letter-spacing: 0.02em; text-transform: none; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .msg.interviewer .who { color: var(--accent); }
+  .msg.you .who { color: var(--muted); }
+  .msg p { font-size: 17px; line-height: 1.55; }
+  .msg.interviewer p { color: var(--text); }
+  .msg.you p {
+    color: var(--soft); padding-left: 14px; border-left: 2px solid rgba(255, 255, 255, 0.12);
+  }
+  code {
+    font-family: var(--mono); font-size: 0.86em; color: var(--code);
+    background: rgba(255, 255, 255, 0.06); border-radius: 5px; padding: 1px 6px;
+    white-space: nowrap;
+  }
+  .chat .prompt.end { margin-top: auto; }
+  .prompt .note { color: var(--muted); font-family: var(--ui); font-size: 13px; margin-left: 12px; }
+  .bluff {
+    text-decoration: underline wavy var(--red); text-decoration-thickness: 1.5px;
+    text-underline-offset: 5px; color: var(--text);
+  }
+
+  .card {
+    background: var(--panel); border-left: 1px solid var(--line);
+    padding: 26px 28px 28px; display: flex; flex-direction: column;
+  }
+  .card .label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+  }
+  .score { display: flex; align-items: baseline; gap: 10px; margin-top: 12px; }
+  .score .num { font-size: 54px; font-weight: 650; letter-spacing: -0.02em; line-height: 1; }
+  .score .out { font-size: 22px; color: var(--muted); }
+  .pill {
+    margin-left: auto; align-self: center; font-size: 13px; font-weight: 600; color: var(--amber);
+    background: rgba(227, 179, 65, 0.13); border: 1px solid rgba(227, 179, 65, 0.3);
+    padding: 4px 11px; border-radius: 999px;
+  }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); margin: 16px 0 22px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 50%; background: var(--amber); border-radius: 3px; }
+
+  .item { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .item svg { width: 18px; height: 18px; margin-top: 2px; }
+  .item h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .item p { font-size: 13.5px; line-height: 1.5; color: var(--soft); }
+  .item .ref { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .item.warn h4 { color: var(--red); }
+  .item.ok h4 { color: var(--green); }
+  .item.again h4 { color: var(--blue); }
+
+  .foot { margin-top: auto; padding-top: 16px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="title"><b>Interviewly</b> · mock interview · clipper</div>
+    </div>
+
+    <div class="body">
+      <div class="chat">
+        <div class="prompt"><span class="caret">›</span><span class="cmd">/interviewly:interview clipper senior</span></div>
+
+        <div class="msg interviewer">
+          <div class="who">Interviewer <small>Daniel, senior engineer</small></div>
+          <p>So, Clipper. Pick one video in the input folder and walk me through everything that happens to it, until the clips land on disk.</p>
+        </div>
+
+        <div class="msg you">
+          <div class="who">You</div>
+          <p>It runs ffmpeg's scene filter, parses <code>pts_time</code> from stderr, keeps the 5 busiest groups and cuts each clip with <code>-c copy</code> so it's fast.</p>
+        </div>
+
+        <div class="msg interviewer">
+          <div class="who">Interviewer</div>
+          <p>You said <code>-c copy</code> because it's fast. In <code>cut_clip</code> the <code>-ss</code> also goes before the <code>-i</code>. Put those two together: where does a clip actually start?</p>
+        </div>
+
+        <div class="msg you">
+          <div class="who">You</div>
+          <p>I think we used <span class="bluff">hardware encoding</span> for that, it was faster.</p>
+        </div>
+
+        <div class="prompt end"><span class="caret">›</span><span class="cmd">end</span><span class="note">→ transcript sent to the reviewer</span></div>
+      </div>
+
+      <aside class="card">
+        <div class="label">Report card</div>
+        <div class="score"><span class="num">2.0</span><span class="out">/ 4</span><span class="pill">Needs work</span></div>
+        <div class="bar"><i></i></div>
+
+        <div class="item warn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f47067" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div>
+            <h4>Not in your code</h4>
+            <p>The only encoder is software libx264 behind <code>--reencode</code>.</p>
+            <span class="ref">clipper.py:50-53</span>
+          </div>
+        </div>
+
+        <div class="item ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#6bc46d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <div>
+            <h4>Model answer</h4>
+            <p>“Earlier than asked. <code>-ss</code> before <code>-i</code> with <code>-c copy</code> seeks to the keyframe at or before the start…”</p>
+            <span class="ref">clipper.py:49-53</span>
+          </div>
+        </div>
+
+        <div class="item again">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#6cb6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>
+          <div>
+            <h4>Back for review in 2 days</h4>
+            <p><span class="ref">ffmpeg-clipper/pipeline</span></p>
+          </div>
+        </div>
+
+        <div class="foot">Scored by a separate reviewer agent</div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

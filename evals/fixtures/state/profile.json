@@ -1,0 +1,286 @@
+{
+  "version": 1,
+  "name": "Sam Rivera",
+  "headline": "Junior backend developer, 2 years, Python (Django, FastAPI, Celery, FFmpeg)",
+  "years_experience": 2,
+  "target_level": "mid",
+  "cv_path": "__WORKSPACE__/sample-cv.md",
+  "updated": "2026-11-01",
+  "active_target": null,
+  "skills": [
+    {
+      "name": "Python",
+      "slug": "python",
+      "category": "language",
+      "status": "strong",
+      "cv_evidence": [
+        "Skills: Python",
+        "Built an automated highlight-clip generator with FFmpeg and Python, processing 500+ videos a day"
+      ],
+      "code_evidence": [
+        "fastapi-todo: app/ (Python 3.12, 227 lines)",
+        "ffmpeg-clipper: clipper.py (92 lines)"
+      ],
+      "projects": ["fastapi-todo", "ffmpeg-clipper", "brightline-media"]
+    },
+    {
+      "name": "FastAPI",
+      "slug": "fastapi",
+      "category": "web-framework",
+      "status": "strong",
+      "cv_evidence": [
+        "Built a task-management REST API with FastAPI, SQLAlchemy and PostgreSQL",
+        "Skills: FastAPI"
+      ],
+      "code_evidence": [
+        "fastapi-todo: app/main.py, app/routers/todos.py, app/deps.py (5 routes, dependencies, BackgroundTasks)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "Django",
+      "slug": "django",
+      "category": "web-framework",
+      "status": "cv-only",
+      "cv_evidence": [
+        "Maintained internal Django services used by the 40-person content team",
+        "Skills: Django"
+      ],
+      "code_evidence": [],
+      "projects": ["brightline-media"]
+    },
+    {
+      "name": "SQLAlchemy",
+      "slug": "sqlalchemy",
+      "category": "orm-data-access",
+      "status": "strong",
+      "cv_evidence": [
+        "Built a task-management REST API with FastAPI, SQLAlchemy and PostgreSQL",
+        "Reduced p95 latency by 60% by moving database access to async",
+        "Skills: SQLAlchemy"
+      ],
+      "code_evidence": [
+        "fastapi-todo: app/database.py:6-11, app/models.py:9-18 (SQLAlchemy 2.0, sync engine and Session only; no async)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "PostgreSQL",
+      "slug": "postgresql",
+      "category": "database",
+      "status": "cv-only",
+      "cv_evidence": [
+        "Built a task-management REST API with FastAPI, SQLAlchemy and PostgreSQL",
+        "Skills: PostgreSQL"
+      ],
+      "code_evidence": [],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "Redis",
+      "slug": "redis",
+      "category": "database",
+      "status": "cv-only",
+      "cv_evidence": ["Skills: Redis"],
+      "code_evidence": [],
+      "projects": []
+    },
+    {
+      "name": "Celery",
+      "slug": "celery",
+      "category": "messaging-queues",
+      "status": "cv-only",
+      "cv_evidence": [
+        "Led the migration of the reporting service from cron scripts to Celery, cutting report delivery time from 6 hours to 20 minutes",
+        "Skills: Celery"
+      ],
+      "code_evidence": [],
+      "projects": ["brightline-media"]
+    },
+    {
+      "name": "Docker",
+      "slug": "docker",
+      "category": "infra-devops",
+      "status": "strong",
+      "cv_evidence": [
+        "Containerised with Docker; 90% test coverage with pytest",
+        "Skills: Docker"
+      ],
+      "code_evidence": [
+        "fastapi-todo: Dockerfile:1-6 (single-stage python:3.12-slim, 1 Uvicorn worker)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "AWS (S3, EC2)",
+      "slug": "aws",
+      "category": "cloud",
+      "status": "cv-only",
+      "cv_evidence": ["Skills: AWS (S3, EC2)"],
+      "code_evidence": [],
+      "projects": []
+    },
+    {
+      "name": "FFmpeg",
+      "slug": "ffmpeg",
+      "category": "cli-media-tools",
+      "status": "strong",
+      "cv_evidence": [
+        "Built an automated highlight-clip generator with FFmpeg and Python, processing 500+ videos a day",
+        "Used scene detection to pick highlights and hardware-accelerated encoding to cut processing time by 3x",
+        "Skills: FFmpeg"
+      ],
+      "code_evidence": [
+        "ffmpeg-clipper: clipper.py:16-55 (ffprobe, select+showinfo scene detection, -c copy or libx264 cuts; software encoding only)"
+      ],
+      "projects": ["ffmpeg-clipper"]
+    },
+    {
+      "name": "Git",
+      "slug": "git",
+      "category": "generic",
+      "status": "cv-only",
+      "cv_evidence": ["Skills: Git"],
+      "code_evidence": [],
+      "projects": []
+    },
+    {
+      "name": "pytest",
+      "slug": "pytest",
+      "category": "testing",
+      "status": "strong",
+      "cv_evidence": [
+        "Containerised with Docker; 90% test coverage with pytest",
+        "Skills: pytest"
+      ],
+      "code_evidence": [
+        "fastapi-todo: tests/test_todos.py (2 tests, TestClient, dependency_overrides, in-memory SQLite)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "GitHub Actions",
+      "slug": "github-actions",
+      "category": "infra-devops",
+      "status": "cv-only",
+      "cv_evidence": [
+        "Wrote integration tests for the publishing pipeline and set up GitHub Actions CI"
+      ],
+      "code_evidence": [],
+      "projects": ["brightline-media"]
+    },
+    {
+      "name": "API-key authentication",
+      "slug": "api-key-auth",
+      "category": "security-auth",
+      "status": "strong",
+      "cv_evidence": [
+        "Implemented API-key authentication and email reminders using background workers"
+      ],
+      "code_evidence": [
+        "fastapi-todo: app/deps.py:18-21, app/config.py:4, app/routers/todos.py:21,43-47 (per-key isolation)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "SQLite",
+      "slug": "sqlite",
+      "category": "database",
+      "status": "code-only",
+      "cv_evidence": [],
+      "code_evidence": [
+        "fastapi-todo: app/config.py:3 (default database), app/database.py:6, tests/test_todos.py:14 (in-memory with StaticPool)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "Pydantic",
+      "slug": "pydantic",
+      "category": "generic",
+      "status": "code-only",
+      "cv_evidence": [],
+      "code_evidence": [
+        "fastapi-todo: app/schemas.py:6-25 (Pydantic v2 request and response models)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "Uvicorn",
+      "slug": "uvicorn",
+      "category": "web-framework",
+      "status": "code-only",
+      "cv_evidence": [],
+      "code_evidence": [
+        "fastapi-todo: Dockerfile:6, requirements.txt:2 (ASGI server, 1 worker)"
+      ],
+      "projects": ["fastapi-todo"]
+    },
+    {
+      "name": "Python threads (concurrent.futures)",
+      "slug": "python-threading",
+      "category": "async-concurrency",
+      "status": "code-only",
+      "cv_evidence": [],
+      "code_evidence": [
+        "ffmpeg-clipper: clipper.py:81-88 (ThreadPoolExecutor, --workers 4)"
+      ],
+      "projects": ["ffmpeg-clipper"]
+    }
+  ],
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Maintained internal Django services used by the 40-person content team",
+      "project": "brightline-media",
+      "type": "scope"
+    },
+    {
+      "id": "c2",
+      "text": "Led the migration of the reporting service from cron scripts to Celery, cutting report delivery time from 6 hours to 20 minutes",
+      "project": "brightline-media",
+      "type": "leadership"
+    },
+    {
+      "id": "c3",
+      "text": "Wrote integration tests for the publishing pipeline and set up GitHub Actions CI",
+      "project": "brightline-media",
+      "type": "technology"
+    },
+    {
+      "id": "c4",
+      "text": "Built a task-management REST API with FastAPI, SQLAlchemy and PostgreSQL",
+      "project": "fastapi-todo",
+      "type": "technology"
+    },
+    {
+      "id": "c5",
+      "text": "Reduced p95 latency by 60% by moving database access to async",
+      "project": "fastapi-todo",
+      "type": "metric"
+    },
+    {
+      "id": "c6",
+      "text": "Implemented API-key authentication and email reminders using background workers",
+      "project": "fastapi-todo",
+      "type": "technology"
+    },
+    {
+      "id": "c7",
+      "text": "Containerised with Docker; 90% test coverage with pytest",
+      "project": "fastapi-todo",
+      "type": "metric"
+    },
+    {
+      "id": "c8",
+      "text": "Built an automated highlight-clip generator with FFmpeg and Python, processing 500+ videos a day",
+      "project": "ffmpeg-clipper",
+      "type": "scope"
+    },
+    {
+      "id": "c9",
+      "text": "Used scene detection to pick highlights and hardware-accelerated encoding to cut processing time by 3x",
+      "project": "ffmpeg-clipper",
+      "type": "metric"
+    }
+  ]
+}

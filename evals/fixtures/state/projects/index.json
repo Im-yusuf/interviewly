@@ -1,0 +1,44 @@
+[
+  {
+    "slug": "fastapi-todo",
+    "name": "Taskly API",
+    "path": "__WORKSPACE__/code/fastapi-todo",
+    "code": true,
+    "stack": ["Python", "FastAPI", "Uvicorn", "SQLAlchemy", "Pydantic", "SQLite", "pytest", "Docker"],
+    "cv_bullets": [
+      "Built a task-management REST API with FastAPI, SQLAlchemy and PostgreSQL",
+      "Reduced p95 latency by 60% by moving database access to async",
+      "Implemented API-key authentication and email reminders using background workers",
+      "Containerised with Docker; 90% test coverage with pytest"
+    ],
+    "analysed": "2026-11-01",
+    "dossier": "projects/fastapi-todo.md"
+  },
+  {
+    "slug": "ffmpeg-clipper",
+    "name": "Clipper",
+    "path": "__WORKSPACE__/code/ffmpeg-clipper",
+    "code": true,
+    "stack": ["Python", "FFmpeg", "ffprobe", "libx264", "concurrent.futures", "argparse"],
+    "cv_bullets": [
+      "Built an automated highlight-clip generator with FFmpeg and Python, processing 500+ videos a day",
+      "Used scene detection to pick highlights and hardware-accelerated encoding to cut processing time by 3x"
+    ],
+    "analysed": "2026-11-01",
+    "dossier": "projects/ffmpeg-clipper.md"
+  },
+  {
+    "slug": "brightline-media",
+    "name": "Brightline Media (Junior Backend Developer)",
+    "path": null,
+    "code": false,
+    "stack": ["Python", "Django", "Celery", "GitHub Actions"],
+    "cv_bullets": [
+      "Maintained internal Django services used by the 40-person content team",
+      "Led the migration of the reporting service from cron scripts to Celery, cutting report delivery time from 6 hours to 20 minutes",
+      "Wrote integration tests for the publishing pipeline and set up GitHub Actions CI"
+    ],
+    "analysed": "2026-11-01",
+    "dossier": "projects/brightline-media.md"
+  }
+]

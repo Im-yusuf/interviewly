@@ -1,0 +1,32 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "interviewly",
+  "displayName": "Interviewly",
+  "version": "0.8.0",
+  "description": "Interview prep that reads your CV and your real code: mock interviews with real follow-ups, project study guides, walkthrough practice, an honest CV check and daily drills. Built it with AI? Learn it well enough to explain it.",
+  "logo": "icon.png",
+  "suggestedPrompts": [
+    "Help me prepare for this job: <paste the job description>",
+    "Quiz me on my project like a real interviewer",
+    "What should I practise next?"
+  ],
+  "author": {
+    "name": "Im-yusuf",
+    "url": "https://github.com/Im-yusuf"
+  },
+  "homepage": "https://github.com/Im-yusuf/interviewly",
+  "repository": "https://github.com/Im-yusuf/interviewly",
+  "license": "MIT",
+  "keywords": [
+    "interview",
+    "interview-prep",
+    "mock-interview",
+    "career",
+    "cv",
+    "resume",
+    "ats",
+    "spaced-repetition",
+    "job-search",
+    "vibe-coding"
+  ]
+}

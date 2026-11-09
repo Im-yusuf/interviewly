@@ -1,0 +1,46 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "interviewly",
+  "version": "0.8.0",
+  "description": "Interview prep that reads your CV and your real code: mock interviews with real follow-ups, project study guides, walkthrough practice, an honest CV check and daily drills. Built it with AI? Learn it well enough to explain it.",
+  "author": {
+    "name": "Im-yusuf",
+    "url": "https://github.com/Im-yusuf"
+  },
+  "homepage": "https://github.com/Im-yusuf/interviewly",
+  "repository": "https://github.com/Im-yusuf/interviewly",
+  "license": "MIT",
+  "keywords": [
+    "interview",
+    "interview-prep",
+    "mock-interview",
+    "career",
+    "cv",
+    "resume",
+    "ats",
+    "spaced-repetition",
+    "job-search",
+    "vibe-coding"
+  ],
+  "interface": {
+    "displayName": "Interviewly",
+    "shortDescription": "You built it. Now explain it.",
+    "longDescription": "Give Interviewly a job description and your CV. It reads your real project code, predicts the questions you'll get with answers from your own work, runs mock interviews with real follow-ups, and teaches you the parts of your projects you can't explain yet, including code you built with AI.",
+    "developerName": "Im-yusuf",
+    "category": "Productivity",
+    "websiteURL": "https://github.com/Im-yusuf/interviewly",
+    "defaultPrompt": [
+      "Help me prepare for this job: <paste the job description>",
+      "Quiz me on my project like a real interviewer",
+      "What should I practise next?"
+    ],
+    "brandColor": "#D97757",
+    "composerIcon": "./.claude-plugin/icon.png",
+    "logo": "./.claude-plugin/icon.png"
+  },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/start/SKILL.md"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python: ["3.8", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests (includes a check that dist/antigravity is up to date)
+        run: python3 -m unittest discover tests
+      - name: JSON manifests parse
+        run: |
+          for f in .claude-plugin/*.json .codex-plugin/plugin.json hooks/hooks.json dist/antigravity/interviewly/plugin.json; do
+            python3 -m json.tool "$f" > /dev/null
+          done
