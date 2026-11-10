@@ -33,9 +33,9 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 2. One question before you write
 
-Ask **once**, in a single message, for everything the rewrite needs from the user. Leave out any part with nothing in it.
+Ask **once**, in a single plain-text message with the options numbered, for everything the rewrite needs from the user, then wait. Don't use the multiple-choice tool: the reply needs free text, and a picked option would leave the other parts unanswered. Leave out any part with nothing in it, and anything the user already answered for an earlier version: if there's a `HOME_DIR/cv/*/changes.md`, read the newest, reuse the wording they agreed and the results they gave, and say in one line that you did.
 
-- **Risky claims.** From `audit.md`, the high- and medium-risk claims (metrics with no evidence, leadership or expertise words, claims the code contradicts, skills nothing shows). List each in one line with your suggested wording, so they can see what they're agreeing to, and ask them to fill any gap in it (`[the parts you designed]`). Ask with options:
+- **Risky claims.** From `audit.md`, the high- and medium-risk claims (metrics with no evidence, leadership or expertise words, claims the code contradicts, skills nothing shows). List each in one line with your suggested wording, so they can see what they're agreeing to, and ask them to fill any gap in it (`[the parts you designed]`). Give these choices, numbered:
   - **Use your safer wording for all of them (Recommended)**
   - **Let me go through them one by one** (then ask about each, up to 4 per question)
   - **Keep my original wording** (still fix anything the code *contradicts*, and say so)
@@ -115,7 +115,7 @@ Show:
 
 Give the user the PDF itself: attach it if your host can send files, and always give its full path. Offer to open it (`open` on macOS, `xdg-open` on Linux, `start` on Windows). For a form that asks them to paste their CV as text, they can copy it from the PDF; tell them to check the role dates came across in order, since some PDF viewers move them.
 
-Then ask with options: **Practise the claims I kept** · **Done for now**. For practice, run the `interviewly:interview` skill with arguments `claims coach 4`.
+Then ask with options: **Practise the claims I kept** · **Done for now**. For practice, run the `interviewly:interview` skill with arguments `claims coach 4`, telling it to take its claims from **Claims to prepare** in `<folder>/changes.md`, not from `audit.md`, which still rates the wording this CV replaced.
 
 ## 6. Later changes
 

@@ -573,11 +573,11 @@ class Font:
             self.nbytes = 1
         weight = fd.get("FontWeight")
         lowered = self.base.lower()
+        self.italic = any(w in lowered for w in ("italic", "oblique")) or bool(fd.get("ItalicAngle"))
         self.bold = (any(w in lowered for w in ("bold", "black", "heavy", "semibold", "demi"))
                      or (isinstance(weight, (int, float)) and weight >= 600)
                      or (not weight and isinstance(fd.get("StemV"), (int, float)) and fd["StemV"] >= 120
-                         and "regular" not in lowered and "light" not in lowered))
-        self.italic = any(w in lowered for w in ("italic", "oblique")) or bool(fd.get("ItalicAngle"))
+                         and "regular" not in lowered and "light" not in lowered and not self.italic))
         self.scale = 0.001
         if self.subtype == "Type3":
             matrix = pdf.get(d.get("FontMatrix")) or [0.001]
@@ -1017,6 +1017,21 @@ class Line:
             prev = g
         return out
 
+    def bold_runs(self):
+        """The bold stretches of the line, each as text: a run ends at a space, a visible gap or the first glyph
+        that isn't bold. So "FastAPI" is a bold run in "**FastAPI**-based", which words() calls one plain word."""
+        out, run, prev = [], "", None
+        for g in self.glyphs + [None]:
+            gap = g is not None and prev is not None and g.x0 - prev.x1 > 0.18 * min(g.size, prev.size)
+            if g is None or gap or not g.text.strip() or not g.font.bold:
+                if run:
+                    out.append(run)
+                run = ""
+            if g is not None and g.text.strip() and g.font.bold:
+                run += g.text
+            prev = g
+        return out
+
     def markdown(self, heading=False):
         """The line with **bold**, *italic* and [links](url) restored (no bold marks on an all-bold heading)."""
         parts, prev_key, buf = [], None, []
@@ -1025,7 +1040,7 @@ class Line:
             if not buf:
                 return
             text = "".join(buf)
-            bold, italic, link = prev_key
+            bold, italic, link = prev_key or (False, False, None)   # leading spaces come before the first styled glyph
             core = text.strip()
             if core:
                 lead, trail = text[:len(text) - len(text.lstrip())], text[len(text.rstrip()):]

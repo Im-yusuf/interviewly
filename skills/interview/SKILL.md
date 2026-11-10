@@ -1,7 +1,7 @@
 ---
 name: interview
 description: Mock interview on the user's projects and CV, one question at a time, scored. Use for "interview me", "quiz me on X" or "grill me".
-argument-hint: "[project|technology] [deep-dive|fundamentals|behavioral|system-design|claims|mixed] [persona] [level] [N] | resume"
+argument-hint: "[project|technology] [deep-dive|fundamentals|behavioral|system-design|claims|mixed] [persona] [level] [N] [coach|realistic] | resume | again"
 ---
 
 # Mock interview
@@ -33,7 +33,7 @@ Take settings from the arguments first:
 
 **Feedback default:** coach (feedback after each answer) for a user's first two interviews, realistic after that. Count the interview transcripts in `HOME_DIR/sessions/` (not drills or walkthroughs) to tell.
 
-**If the arguments already name a focus or a mode** (for example "Quiz me on Taskly", or an offer from another skill), don't ask anything. Fill the gaps with defaults: senior engineer, 5 questions, and the feedback default. State them in one line before the opener ("Senior engineer, 5 questions, feedback after each answer. Say `settings` to change.").
+**If the arguments already name a focus or a mode** (for example "Quiz me on Taskly", or an offer from another skill), don't ask anything. Fill the gaps with defaults: deep-dive for a project and fundamentals for a technology, senior engineer, 5 questions, and the feedback default. State them in one line before the opener ("Senior engineer, 5 questions, feedback after each answer. Say `settings` to change.").
 
 Only when the user gave neither a focus nor a mode, ask about what's missing in **one** call, asking with options:
 
@@ -51,11 +51,11 @@ Plan `length` main questions, each with a topic id (`<project-or-skill>/<topic-s
 | Mode | Read | Questions come from |
 |---|---|---|
 | deep-dive | `projects/<focus>.md` | Its **Probe points**, **Weak spots** and **Decisions and trade-offs**, plus that project's topics from `iv due` and its CV claims |
-| fundamentals | `references/question-patterns.md`, the dossiers that use the skill | The skill's category patterns at the user's level, each paired with "and how did you use it in <project>?" |
+| fundamentals | `references/question-patterns.md`, the dossiers that use the skill | The skill's category patterns at the user's level, each followed up with "How did you use that in <project>?" |
 | behavioral | `stories.md` (if it exists), `references/question-patterns.md` (behavioral table) | Common behavioral questions; prefer categories that have a story, and include one category that doesn't |
 | system-design | the focus project's dossier | A single design prompt that grows the user's own project, scoped to their level and stack, run as one thread through the stages in `personas.md` (about 6–8 interviewer turns) |
-| claims | `audit.md` (if it exists) or `profile.claims` | High-risk claims first (only the audit rates risk; without it, start with metric and leadership claims). Each thread checks one claim: what, how measured, your part, what-if |
-| mixed | the files above, with the dossiers read as below | An opener ("Tell me about yourself", topic `profile/tell-me-about-yourself`), 2 deep-dive, 1–2 fundamentals, 1 behavioral, 1 claim |
+| claims | `audit.md` (if it exists) or `profile.claims`; the claims the calling skill names, when it names some | High-risk claims first (only the audit rates risk; without it, start with metric and leadership claims). Each thread checks one claim: what, how measured, your part, what-if |
+| mixed | the files above, with the dossiers read as below | An opener ("Tell me about yourself", topic `profile/tell-me-about-yourself`), 2 deep-dive, 1–2 fundamentals, 1 behavioral, 1 claim. That's 6 or 7: with a `length` of 5, drop the claim, then the second fundamentals |
 
 In mixed mode, read the dossier of the project that matters most in full, and only the **Weak spots** and **Probe points** of the others: `awk '/^## /{p=/^## (Weak spots|Probe points)$/} p' "<dossier>"`.
 
@@ -107,15 +107,15 @@ A skip or a dead end should teach something, not just move on.
   1. **The key idea:** one or two sentences, with a file reference when there is one.
   2. **How a strong answer sounds:** two or three sentences, first person, in quotes, with gaps in brackets for anything you don't know.
   3. **Retry:** one short, easier question on that same point, answerable in a few words, with a single question mark ("Try this: when the reminder task runs, has the 201 already been sent?"). End your turn and wait.
-  Log it in the session file as `**Skipped:** yes · **Lesson:** given · **Retry answer:** …`. Then move on to the next thread, back in character.
+  Log it in the session file as `**Skipped:** yes · **Lesson:** given · **Retry answer:** …`. When the retry answer comes, say in one line whether it was right (if not, the key idea once more). That line replaces the four-line feedback for this thread. Then move on to the next thread, back in character.
 - **Realistic mode:** stay in character and move on. But after **two skips in a row**, or two skips in the first three questions, step out once and ask with options: **Switch to coach mode** (I'll teach each point as we go) · **Keep it realistic** · **End and get my review**. Switching keeps the session going in coach mode from the next question.
 
-When all threads are done, close in character with one line, then: "Do you have any questions for me?" Whatever they ask, answer briefly in character. Then give them, out of character, two strong questions they could ask in a real interview for this kind of role (from the target file's questions to ask them, if it has any).
+When all threads are done, close in character with one line, then: "Do you have any questions for me?" Whatever they ask, answer briefly in character, without inventing facts about a real company: use the target file's research, or say it's one to put to the real interviewer. Then give them, out of character, two strong questions they could ask in a real interview for this kind of role (from the target file's questions to ask them, if it has any).
 
 ## 5. Review
 
 1. Set `status: complete` in the session file.
-2. Tell the user in one line that a separate reviewer is scoring it (it takes about a minute). Start the **`interviewly:session-reviewer`** agent with `session` (the session file's absolute path), `home` (`HOME_DIR`) and `plugin` (`${CLAUDE_PLUGIN_ROOT}` resolved to an absolute path), plus `cv` (the CV path or text) and `job` (the job description) if `HOME_DIR/cv.md` doesn't exist yet. If that agent type isn't available, use a general-purpose agent and tell it to read and follow `${CLAUDE_PLUGIN_ROOT}/agents/session-reviewer.md`. If you can't start subagents at all, score it yourself following that file, as strictly as a separate reviewer would. Don't score the session yourself: you were the interviewer, so a fresh reviewer scores it more fairly.
+2. Tell the user in one line that a separate reviewer is scoring it (it takes about a minute). Start the **`interviewly:session-reviewer`** agent with `session` (the session file's absolute path), `home` (`HOME_DIR`) and `plugin` (`${CLAUDE_PLUGIN_ROOT}` resolved to an absolute path), plus `cv` (the CV path or text) and `job` (the job description) if `HOME_DIR/cv.md` doesn't exist yet. If that agent type isn't available, use a general-purpose agent and tell it to read and follow `${CLAUDE_PLUGIN_ROOT}/agents/session-reviewer.md`. Never score the session yourself while you can start a subagent: you were the interviewer, so a fresh reviewer scores it more fairly. Only if you can't start subagents at all, score it yourself following that file, as strictly as a separate reviewer would.
 3. Show the report card it returns. When the score is below 2.8 or anything was skipped, start with **Learn this first** (the reviewer's plan) and one encouraging line, then the score:
    - The session score and its label (e.g. "2.9 / 4 · Nearly there")
    - A table: **#**, topic, score, a one-line verdict

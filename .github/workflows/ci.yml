@@ -46,6 +46,20 @@ jobs:
             python -m json.tool "$f" > /dev/null
           done
 
+  validate:
+    name: plugin validator
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Claude Code (the validator needs no sign-in)
+        run: npm install --global @anthropic-ai/claude-code
+      - name: Manifests, skills and agents pass the strict checks the plugin directory runs
+        run: claude plugin validate . --profile directory --strict
+
   eval-scaffolds:
     name: eval scaffolds
     runs-on: ubuntu-22.04

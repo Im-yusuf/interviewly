@@ -489,5 +489,32 @@ class AtsCheckTest(unittest.TestCase):
 
 
 
+class LinksKeptTest(unittest.TestCase):
+    def test_a_link_in_two_pieces_counts_once(self):
+        """A link that wraps onto a second line, or is part bold, arrives as two pieces."""
+        pieces = [("the planner design", "https://example.com/planner"), ("write-up", "https://example.com/planner/"),
+                  ("GitHub", "https://github.com/jordan-vale-example")]
+        self.assertEqual(ats_check.joined_links(pieces), [("the planner design write-up", "https://example.com/planner"),
+                                                          ("GitHub", "https://github.com/jordan-vale-example")])
+
+    def test_links_listed_after_the_text_count_even_when_the_text_has_an_email(self):
+        """An OpenDocument CV has no inline links: they are only in "Links in the file"."""
+        with tempfile.TemporaryDirectory() as tmp:
+            original = Path(tmp) / "original.md"
+            original.write_text("# Jordan Vale\njordan.vale@example.com\n\n- Built Planner Demo\n\n"
+                                "Links in the file:\n- Planner Demo: https://planner.example.com/demo\n", encoding="utf-8")
+            status, detail = ats_check.links_kept(original, "# Jordan Vale\njordan.vale@example.com\n\n- Built Planner Demo\n")
+        self.assertEqual(status, "warn")
+        self.assertIn("Planner Demo (https://planner.example.com/demo)", detail)
+
+    def test_an_email_ends_before_the_full_stop(self):
+        self.assertEqual(ats_check.md_links("References on request: jordan.vale@example.com."),
+                         [("jordan.vale@example.com", "mailto:jordan.vale@example.com")])
+        self.assertEqual(ats_check.md_links("Code: **github.com/jordan-vale-example/planner**"),
+                         [("github.com/jordan-vale-example/planner", "https://github.com/jordan-vale-example/planner")])
+        self.assertEqual(ats_check.url_key("https://www.linkedin.com/in/zo%C3%AB-example/"),
+                         ats_check.url_key("linkedin.com/in/zo\u00eb-example"))
+
+
 if __name__ == "__main__":
     unittest.main()

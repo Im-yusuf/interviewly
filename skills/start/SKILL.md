@@ -25,7 +25,7 @@ Resolve `HOME_DIR` (`echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`) and check 
 If `HOME_DIR/profile.json` exists, the user is set up:
 - **A new job ad** (and no CV): run the `interviewly:target` skill with it, without `quick`, so it asks for the interview date. Don't ask for the CV or code again. Then do what they asked for, or ask with options: **Likely questions for this job (Recommended)** · **Practice interview** (both as in the menu below).
 - **A CV (a file or pasted), or "update my CV":** run the `interviewly:setup` skill with it (its **Update my CV** path), then handle any job ad as above.
-- **Something specific:** route it with the table.
+- **Something specific:** route it as **Where requests go** says.
 - **Otherwise:** run `iv stats --json` and greet them in one line: readiness with its coverage ("Readiness 34/100 · 8 of 30 topics practised"; below 25% coverage, say there isn't enough practice yet for a score), streak, today's practice (reviews due plus today's new topics), and the interview countdown if there is one. (In Antigravity there's no daily reminder, so this line is where they see it.) Then ask with options, "What now? (Or paste a new job ad or CV.)":
   - **Practice interview**, or **Resume interview** when an interview transcript in `sessions/` (not `-drill`, `-learn` or `-walkthrough`) has `status: paused` or `in-progress`: run the `interviewly:interview` skill, with `resume` to resume.
   - **5-minute drill** (say how many reviews and new topics it has): run the `interviewly:drill` skill.
@@ -72,7 +72,7 @@ If they choose folder paths, ask for them in one short message. Write a typed da
 
 ## 4. Something useful within a minute
 
-Don't make the user wait for the full setup. With background subagents, start step 5's background work first, then show this straight away, so a mock interview's first question can't end your turn before setup has begun. Work from the job description and the CV you've already read: no project analysis yet.
+Don't make the user wait for the full setup. Except for *Practice now*, show this first, then carry straight on to step 5 in the same turn, without waiting for a reply. For *Practice now* with background subagents, start step 5's background work first, so the mock interview's first question can't end your turn before setup has begun (step 5's "Show step 4" is for that case). Work from the job description and the CV you've already read: no project analysis yet.
 
 If they said "skip" (no job description), "this job" below means a role at their target level (what the CV suggests) using their main stack (the technologies their CV leans on most). Say so in one line.
 
@@ -96,8 +96,8 @@ Tell the user in one line that the full setup is running and that answers get sh
 In quick mode these skills ask the user nothing (setup still asks which repos to clone) and end with a short summary.
 
 **With background subagents** (Claude Code has them), the analysts must start from this conversation, since subagents can't start subagents:
-- **Now:** run item 1 with `background` added. Setup writes `cv.md` and `projects/index.json`, clones only the confirmed repos, starts one background `interviewly:project-analyst` per project with code in one message, and returns. (With no code to analyse, start the background agent below straight away.) Show step 4 and end your turn.
-- **As each analyst reports back,** say nothing to the user. Once all are back, check each dossier exists (`head -3` shows its frontmatter); a missing one stays `"dossier": null` in `projects/index.json`, and the final notice names it. Then quietly start one background agent for the rest, asking the user nothing: setup with `quick finish`, then items 2 and 3, each by reading and following `<plugin>/skills/<name>/SKILL.md` (the guide is in start's). It can't see this conversation, so give it `home` and `plugin` (absolute paths), the job description, the date, whether research is on, the level, git identities and GitHub username setup used, and what they chose in step 3.
+- **Now:** run item 1 with `background` added. Setup writes `cv.md` and `projects/index.json`, clones only the confirmed repos, starts one background `interviewly:project-analyst` per project with code in one message, and returns. (With no code to analyse, start the background agent below straight away.) Show step 4 if you haven't yet, and end your turn.
+- **As each analyst reports back,** say nothing to the user. Once all are back, check each dossier exists (`head -3` shows its frontmatter); a missing one stays `"dossier": null` in `projects/index.json`, and the final notice names it. Then quietly start one background agent for the rest, asking the user nothing: setup with `quick finish`, then items 2 and 3, each by reading and following `<plugin>/skills/<name>/SKILL.md` (the guide is in start's). It can't see this conversation, so give it `home` and `plugin` (absolute paths), the job description, the date, whether research is on, the CV's path for `profile.cv_path` (`null` if they had no CV), the level, git identities and GitHub username setup used, and what they chose in step 3.
 - **When that agent reports back,** check that `HOME_DIR/profile.json` exists, `iv check` passes and what they chose was written (the guide, `audit.md` or the study guide). If not, say so in one line and do the missing part yourself (after the interview, if one is running).
 
 **Without them,** show step 4 first, then do the work in this turn, in order, posting one short progress line per stage ("Profile done. Now matching it to the job…"). For *Practice now*, do it when the interview ends.
@@ -119,4 +119,4 @@ Add all 15 questions to the practice schedule: pass them to `iv seed` as a JSON 
 
 ## 6. Close
 
-End by telling them, in two lines: what's saved (everything is in `HOME_DIR`, on their machine), and the one best next step (with no CV, `/interviewly:cv new` builds one). Mention that next time they can just say "let's practise" or "what should I do next?".
+The close goes with step 5's final notice, never with step 4's quick answer; if a mock interview is running, say it when the interview ends. Add one line, ahead of any offer: everything is saved in `HOME_DIR`, on their machine, and next time they can just say "let's practise" or "what should I do next?". With no CV, add that `/interviewly:cv new` builds one.

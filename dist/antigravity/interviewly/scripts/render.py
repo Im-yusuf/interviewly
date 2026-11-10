@@ -140,6 +140,14 @@ def label_for(score, questions=None):
     return "Strong session" if label == "Interview-ready" and questions is not None and questions < 5 else label
 
 
+def session_label(review, score, questions=None):
+    """The label a report card shows: the rubric's label for the score, unless the reviewer wrote words of their
+    own. A rubric label that belongs to a different score ("Interview-ready" on a 1.7) is replaced."""
+    label = review.get("label").strip() if isinstance(review.get("label"), str) else ""
+    earned = label_for(score, questions)
+    return earned if not label or label in (*LABELS.values(), "Strong session") else label
+
+
 def pct_band(value):
     return "red" if value < 40 else "amber" if value < 70 else "green"
 
@@ -213,7 +221,7 @@ def report_card(review, streak=None):
   <h1>{fmt(title)}</h1>
   <div class="meta">{fmt(meta)}</div>
   <div class="big" style="margin-top:18px"><span class="num">{fmt(shown(score))}</span><span class="out">/ 4</span>
-    <span class="pill band-{b}">{fmt(review.get('label') or label_for(score, len(threads) or None))}</span></div>
+    <span class="pill band-{b}">{fmt(session_label(review, score, len(threads) or None))}</span></div>
   <div style="margin-top:14px">{bar(score_of(score), 4, b)}</div>
   <div class="chips">{streak_chip(streak)}<span class="chip">{plural(len(threads), 'question')}</span></div>
 </section>"""]
@@ -347,7 +355,11 @@ def dashboard(stats):
     weakest = "".join(f'<tr><td><code>{fmt(t["id"])}</code><div class="meta">{fmt(t.get("label"))}</div></td>'
                       f'<td class="n band-{band(t["last_score"])}">{fmt(shown(t["last_score"]))}/4</td>'
                       f'<td class="n">due {fmt(t.get("next_due"))}</td></tr>' for t in stats["weakest"])
-    sessions = "".join(f'<tr><td>{fmt(s["date"])}</td><td>{fmt(s.get("mode"))}</td><td>{fmt(s.get("focus"))}</td>'
+    # a session's focus is a slug: show the project's or skill's name, as the tables above and the report card do
+    names = {x.get("slug"): x.get("name") for x in [*stats["projects"], *stats["skills"]]
+             if isinstance(x.get("slug"), str) and x.get("name")}
+    focus_name = lambda focus: names.get(focus, focus) if isinstance(focus, str) else focus
+    sessions = "".join(f'<tr><td>{fmt(s["date"])}</td><td>{fmt(s.get("mode"))}</td><td>{fmt(focus_name(s.get("focus")))}</td>'
                        f'<td class="n band-{band(s["score"])}">{fmt(shown(s["score"]))}</td></tr>'
                        for s in reversed(stats["sessions"][-10:]))
     body = f"""
@@ -383,11 +395,8 @@ def share_card(review, streak=None, show_focus=False):
     mode = mode_name(mode) if mode in MODES else ""
     focus = focus_of(review) if show_focus else ""
     threads = [t for t in as_list(review.get("threads")) if isinstance(t, dict)]
-    label = review.get("label").strip() if isinstance(review.get("label"), str) else ""
-    if label not in (*LABELS.values(), "Strong session"):   # only a rubric label: the reviewer's text stays off
-        label = label_for(score, len(threads) or None)
-    elif label == LABELS["green"] and len(threads) < 5:     # the rubric needs 5 questions for Interview-ready
-        label = label_for(score, len(threads))
+    # always the rubric's label for this score (never the reviewer's own text, or a label the score doesn't earn)
+    label = label_for(score, len(threads) or None)
     current = num(streak.get("current")) if isinstance(streak, dict) else None
     streak_line = f"🔥 {fmt(current)}-day practice streak" if current and current >= 2 else ""
     dims = []

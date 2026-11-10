@@ -25,7 +25,7 @@ Ask with options, in **one** call, skipping anything the arguments already answe
 - **Round** (header "Round"): Recruiter screen · Technical or system design · Behavioral / hiring manager · Onsite (several interviews in a day). Add to the question text: *(or type "other")*. For the two combined options, choose `technical` or `system-design`, and `behavioral` or `hiring-manager`, from the questions they list in step 2. Anything else is `other`.
 - **How it went** (header "Feeling"): Went well · Mixed · Rough · Too early to tell
 
-If there's no target, ask in plain text for the company and role. The date is today unless they say otherwise.
+If there's no target, ask in plain text for the company and role. The date is today unless they say otherwise. What the user's own message already told you (the round, how it went, the company, some of the questions) counts as answered: never ask for it again, and in step 2 ask only for what's missing.
 
 ## 2. Brain dump
 
@@ -34,7 +34,7 @@ In one message, ask them to list **every question they remember**, in order, wit
 ## 3. Analyse
 
 For each question:
-- **Classify:** project deep-dive · fundamentals · behavioral · system design · CV claim · motivation · logistics (salary, notice period, right to work: keep their figures and status out of every `iv score` field). Give it a topic id, reusing an existing one where it fits (list them with `grep -o '"id": "[^"]*"' HOME_DIR/topics.json`), plus a `skill` and `project`.
+- **Classify:** project deep-dive · fundamentals · behavioral · system design · CV claim · motivation · logistics (salary, notice period, right to work: keep their figures and status out of every `iv score` field). Give it a topic id, reusing an existing one where it fits (list them with `grep -o '"id": "[^"]*"' HOME_DIR/topics.json`), plus a `skill` and `project` (both `null` for a behavioral, motivation or logistics question: never a made-up slug).
 - **Assess** what they recall answering, from 1 to 4, using `${CLAUDE_PLUGIN_ROOT}/references/rubric.md`. Say once that this is based on their memory of the answer, which is never exact.
 - **Stronger answer:** what a 4/4 answer would have been, in the first person, 60–120 words, grounded in their code, dossiers and stories, with file references. Never make up facts about their work: leave a bracketed gap for anything you can't verify, as the rubric's **Writing feedback** describes.
 - **Likely follow-up** if it comes up again.
@@ -72,8 +72,9 @@ Show:
 - The two weakest answers with their stronger versions, quoted
 - The predicted next round and its top 3 likely questions
 - The prep plan
+- The path of the debrief file
 
-Then offer: "Want to practise the weak ones now?" If yes, run the `interviewly:interview` skill with arguments `mixed` plus the persona that best fits the next round (`recruiter`, `hiring-manager` or `bar-raiser`; for a technical round leave it out, since the senior engineer is the default, and never write bare `senior`, which sets the level). Also offer a short thank-you note to the interviewer (4–5 lines, referencing one specific thing they discussed) for the user to send themselves. No `profile.json` yet? Suggest `/interviewly:start`, so the next round's practice uses their own code.
+Then offer: "Want to practise the weak ones now?" If yes, run the `interviewly:interview` skill with arguments `mixed` plus the persona that best fits the next round (`recruiter`, `hiring-manager` or `bar-raiser`; for a technical round leave it out, since the senior engineer is the default, and never write bare `senior`, which sets the level). Tell it to plan the session around the questions that scored 2 or less, under the same topic ids: they aren't due yet, so its usual plan would leave them out. Also offer a short thank-you note to the interviewer (4–5 lines, referencing one specific thing they discussed) for the user to send themselves. No `profile.json` yet? Suggest `/interviewly:start`, so the next round's practice uses their own code.
 
 ## Outcome (`outcome <target> next-round|offer|rejected`)
 

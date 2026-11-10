@@ -189,6 +189,55 @@ class ManifestTest(unittest.TestCase):
         skills = {p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md")}
         self.assertEqual(listed, skills)
 
+    def test_command_reference_covers_every_skill(self):
+        reference = (ROOT / "docs" / "commands.md").read_text(encoding="utf-8")
+        listed = set(re.findall(r"^### `/interviewly:([a-z-]+)`", reference, re.M))
+        skills = {p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md")}
+        self.assertEqual(listed, skills)
+
+    def test_readme_eval_count_is_current(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        claimed = re.search(r"\[(\d+) behaviour evals\]", readme)
+        cases = len(list((ROOT / "evals").glob("*/case.yaml")))
+        self.assertEqual(claimed and int(claimed.group(1)), cases, "update the eval count in the README")
+
+    def test_claude_icon_exists(self):
+        claude = self.load(".claude-plugin/plugin.json")
+        self.assertTrue((ROOT / claude["icon"]).is_file(), claude["icon"])
+
+
+class DocsTest(unittest.TestCase):
+    """Links between the Markdown docs must point at files and headings that exist."""
+
+    PAGES = ["README.md", "PRIVACY.md", "SECURITY.md", "CONTRIBUTING.md", "CHANGELOG.md",
+             "docs/commands.md", "docs/how-it-works.md", "docs/troubleshooting.md"]
+    LINK = re.compile(r"\]\(([^)\s]+)\)|(?:src|href)=\"([^\"]+)\"")
+
+    @staticmethod
+    def anchors(text):
+        """GitHub's heading anchors: lower case, punctuation dropped, spaces to hyphens."""
+        found = set()
+        for heading in re.findall(r"^#{1,6}\s+(.+?)\s*$", text, re.M):
+            plain = re.sub(r"[`*_]|\[([^\]]*)\]\([^)]*\)", r"\1", heading).strip().lower()
+            found.add(re.sub(r"\s", "-", re.sub(r"[^\w\s-]", "", plain)))
+        return found
+
+    def test_relative_links_resolve(self):
+        broken = []
+        for page in self.PAGES:
+            source = ROOT / page
+            for match in self.LINK.finditer(source.read_text(encoding="utf-8")):
+                link = match.group(1) or match.group(2)
+                if re.match(r"[a-z]+:", link):   # https:, mailto:
+                    continue
+                path, _, anchor = link.partition("#")
+                target = (source.parent / path).resolve() if path else source
+                if not target.exists():
+                    broken.append(f"{page}: {link} (no such file)")
+                elif anchor and target.suffix == ".md" and anchor not in self.anchors(target.read_text(encoding="utf-8")):
+                    broken.append(f"{page}: {link} (no such heading)")
+        self.assertEqual(broken, [])
+
 
 if __name__ == "__main__":
     unittest.main()

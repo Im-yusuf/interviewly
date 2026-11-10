@@ -2,6 +2,28 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.10.0 · 2026-11-10
+
+- **A health check.** `/interviewly:setup doctor` prints what a bug report needs (versions, whether your home folder is private, counts of projects and topics, whether the reminder last failed) and nothing personal: no names, paths or CV text. The bug report form asks for it.
+- **A command reference and troubleshooting.** [docs/commands.md](docs/commands.md) lists every command with its arguments and the words you can type during an interview. [docs/troubleshooting.md](docs/troubleshooting.md) covers the problems people hit first.
+- **A privacy page.** [PRIVACY.md](PRIVACY.md) says in one place what Interviewly reads, runs, saves and sends, including the session-start hook. SECURITY.md is now about reporting problems and how the risk is limited.
+- **A clearer README.** The install commands are at the top, generic questions sit next to the ones Interviewly asks about the sample projects, commands are grouped by what you're doing, and the report card from a sample interview is included.
+- **Listing details.** The plugin manifest has a display name, icon, and documentation, support and privacy links, and the marketplace entry has tags.
+- **A faster first answer.** `/interviewly:start` shows your likely questions before it starts on your code, not after. `/interviewly:target` asks for the interview date before it researches the company, so "no research" can still be said and the slow part runs without a stop. A new user who types `/interviewly:setup` is taken through start.
+- **Sharper practice.** Fundamentals questions ask one thing at a time. After a coach-mode lesson you're told whether your retry was right. A drill no longer supplies a "correct answer" for work only you know about. Walkthrough length and "I" versus "we" are counted exactly (`iv count`) instead of estimated. An interview on a technology defaults to fundamentals, and the interviewer won't invent facts about a real company when you ask it questions.
+- **Learning your code.** A larp-it plan puts the riskiest code straight after the first lesson, `larp-it next` carries on with the plan you're part-way through, each message gives feedback and then one question, and the score recorded is the interview check's.
+- **CV work.** The audit no longer rates a plain line about work it can't see as risky. The CV rewrite asks its one question in plain text and waits, reuses what you answered for an earlier version, and "practise the claims I kept" practises the claims that are in the new CV. Rechecking a few lines keeps the audit's overview of the projects it didn't recheck.
+- **After an interview.** Debrief doesn't ask again for what you've already said, and "practise the weak ones" practises those questions.
+- **Also.** Report-card feedback comes in the language the interview was held in. Model answers for behavioral and pitch questions follow their own shape. An agency ad that names no employer isn't researched. Technology prep bridges from a job on your CV when its code can't be shared.
+- **Reading your CV.** A PDF with a blank or indented line is no longer refused. Italic text in PDFs made by Chrome or Google Docs is no longer read as bold. Word links stored in several pieces are kept.
+- **The CV PDF.** A long role line or contact item wraps at its spaces instead of being cut in the middle of a word. Link addresses with accents or brackets open correctly in every viewer. A paragraph that starts and ends in italics no longer prints its asterisks.
+- **The ATS check.** No more failures on a correct PDF for an email at the end of a sentence, a bold profile address, non-breaking hyphens, pasted direction marks, or bold inside a word (`**FastAPI**-based`). Text it can't compare (Arabic, Hebrew, Hindi, Chinese, Japanese) is a warning to check by eye, not a failure no edit can clear. "Links kept" counts a link that wraps onto two lines once, and sees links an OpenDocument CV only lists at the end.
+- **The practice schedule.** On the day of the interview, reviews brought forward for it stay due until you've done them. A drill on `go` no longer pulls in `django` topics. Two questions on one topic in a session count once, at the lower score.
+- **The CV audit.** A section with nothing left to report is cleared instead of keeping its old text. Files left by an interrupted audit can't override a fresh assessment. A line your CV repeats is rechecked when one copy is deleted.
+- **The reminder and the checks.** The reminder runs where Python is called `python` or `py`, as on Windows. The state check reports an interview date it can't read and a job target whose file is missing. A home folder that can't be written to gives one line, not a traceback. The share image and report card always show the label the score earns. The dashboard lists recent sessions by project name.
+- **Who wrote what.** Before you've said which authors are you, every author is listed and nobody's lines are called yours.
+- **Checks.** CI runs the plugin validator's strict checks on a fresh checkout. Unit tests fail when the README or the command reference misses a command, when a link between the docs is broken, or when the README's eval count is out of date. A new eval covers the health check.
+
 ## 0.9.1 · 2026-11-09
 
 Fixes from the first full run of the behaviour evals.
@@ -37,42 +59,14 @@ A full audit (security, privacy, scripts, the CV pipeline, the skills, job-searc
 - **Your target's gaps come first.** New drill topics for a skill the job asks for that you haven't used yet now arrive before topics about projects the job analysis cites as evidence.
 - **Fixes.** UTF-8 everywhere (Windows consoles included), better reading of RTF, Word, ODT and PDF CVs (encrypted PDFs get a clear message), CVs without `##` sections and in other languages, safer audit bookkeeping, and long words and tall blocks in the built-in PDF writer.
 
-## 0.7.0 · 2026-11-02
+## Earlier versions
 
-- **A calmer practice queue.** Topics you've never practised are now *new*, not *due*: a few arrive each day (3 by default, `/interviewly:drill new N` to change it), the ones your target job mentions most first. Reviews you owe always come first.
-- **`/interviewly:walkthrough`.** Practise "walk us through something you built": timed, followed up, scored for accuracy, depth, your own part and structure, with a model walkthrough from your code and an instant retry.
-- **Quicker CV audits.** After the first audit, only CV lines that changed (or whose project's code analysis is newer) are checked again. Big first audits run in parallel.
+Interviewly was developed privately before 0.8.0. Newest first:
 
-## 0.6.0 · 2026-11-02
-
-- `/interviewly:cv` delivers one PDF that applicant tracking systems read cleanly, with your links and bold kept. Word and text copies are gone.
-- The ATS check reads the PDF itself: every word, link and bold phrase of the source must be in it, and the text must read the same in every parser.
-- A built-in PDF writer takes over when no browser can run (for example inside a sandbox).
-
-## 0.5.0 · 2026-11-01
-
-- CV rewrites follow ATS rules (standard sections, one line per role, consistent dates, the job's exact keywords where true) and are checked by `scripts/ats_check.py`.
-
-## 0.4.0 · 2026-11-01
-
-- In coach mode, a skip or "I don't know" becomes a short lesson and an easier retry.
-- Low scores come with a small "learn this first" plan.
-- Reviewer calibration evals for strong, bluffed and skipped sessions.
-- `/interviewly:cv`: an honest CV rewrite that never invents anything.
-
-## 0.3.1 · 2026-11-01
-
-- The first useful answer arrives in about a minute; setup analyses up to four projects in parallel in the background.
-
-## 0.3.0 · 2026-11-01
-
-- Runs in Codex and Antigravity as well as Claude Code.
-- `/interviewly:start`: give it a job description and your CV, then choose likely questions or practice.
-
-## 0.2.0 · 2026-11-01
-
-- A once-a-day reminder, streaks, `/interviewly:debrief` for real interviews, company research, an HTML report card, a progress dashboard and a share image.
-
-## 0.1.0 · 2026-11-01
-
-- First release: setup, mock interviews with follow-ups, project breakdowns, technology prep, CV claim audit, job targeting, STAR stories, drills with spaced repetition and progress, plus examples and evals.
+- **0.7.0** A calmer practice queue: topics you've never practised are *new*, not *due*, and a few arrive each day (3 by default, `/interviewly:drill new N` to change it), the ones your target job mentions most first. `/interviewly:walkthrough`, for "walk us through something you built". Quicker CV audits that only recheck the lines that changed.
+- **0.6.0** `/interviewly:cv` delivers one PDF that applicant tracking systems read cleanly, with your links and bold kept, and the ATS check reads that PDF itself. A built-in PDF writer for when no browser can run.
+- **0.5.0** CV rewrites follow ATS rules (standard sections, one line per role, consistent dates, the job's exact keywords where true), checked by `scripts/ats_check.py`.
+- **0.4.0** In coach mode, a skip or "I don't know" becomes a short lesson and an easier retry. Low scores come with a small "learn this first" plan. `/interviewly:cv`, an honest CV rewrite that never invents anything.
+- **0.3.0** Codex and Antigravity as well as Claude Code. `/interviewly:start`, with the first useful answer in about a minute while setup analyses up to four projects in the background.
+- **0.2.0** A once-a-day reminder, streaks, `/interviewly:debrief` for real interviews, company research, an HTML report card, a progress dashboard and a share image.
+- **0.1.0** Setup, mock interviews with follow-ups, project breakdowns, technology prep, CV claim audit, job targeting, STAR stories, and drills with spaced repetition.

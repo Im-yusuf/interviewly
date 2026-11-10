@@ -57,6 +57,8 @@ Write `sessions/<same name>.json` in the format in `state-schema.md`: the sessio
 - `scores`, `score`, `verdict`, `landed`, `missing`, `model_answer`, `say_next_time`.
 - `answer_excerpt` (optional): up to about 60 words of what the user actually said, quoted word for word from the transcript, so the report card can set it beside the model answer.
 
+Write the text fields in the language the interview was held in. Keep the session `label`, topic ids, code, commands and file names as they are.
+
 Follow the rubric's rules for model answers. In particular, never make up facts about the user's work: anything you can't verify is a bracketed gap that names what's missing (`[how you measured it]`), never a guess. Leave `scheduled` empty.
 
 Then run:

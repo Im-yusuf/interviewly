@@ -28,14 +28,14 @@ Always show readiness with its coverage. When `overall` is null or under 25% of 
 4. **Applications** (if there's more than one target or any debrief): one line each: company · role · interview date · latest round and its outcome.
 5. The last sessions, with a one-line trend ("up from 2.4 to 3.1 over 4 sessions").
 6. The 5 weakest topics.
-7. **Do this next:** exactly one command. "The target level" is the active target's `level`, else `profile.target_level`. Pick the first rule that applies:
+7. **Do this next:** exactly one command. "The target level" is the active target's `level`, else `profile.target_level`. Check the rules in order and stop at the first that applies, reading a file a rule names only when you reach that rule (for rule 5, only the dossier's **Explain-risk** section):
    1. The interview was 1–3 days ago and there's no debrief for it (no file in `debriefs/` naming the target or company, dated on or after the interview) → `/interviewly:debrief <target>`
    2. The interview is 0–2 days away → `/interviewly:interview mixed <the target's likeliest interviewer>` (`recruiter`, `hiring-manager` or `bar-raiser`; for a senior engineer leave it out, never bare `senior`, which sets the level) if there's been no interview session in the last 2 days, otherwise `/interviewly:drill`
    3. No interview sessions yet → `/interviewly:interview <strongest project for the target> deep-dive`
    4. 5 or more reviews due, or new topics waiting and nothing practised today → `/interviewly:drill`
    5. A project the target cares about has high **Explain-risk** components and no finished plan in `learning/<slug>.json` → `/interviewly:larp-it <project>`
    6. A must-have skill for the target is untested, below 40, or not in the profile at all → `/interviewly:prep <skill>` if `guides/<skill-slug>.md` doesn't exist yet; otherwise `/interviewly:interview <skill-slug> fundamentals`, since the guide is already written
-   7. A project with readiness below 50 → `/interviewly:breakdown <project>`
+   7. A project with readiness below 50 → `/interviewly:breakdown <project>` if `guides/<project>-breakdown.md` doesn't exist yet; otherwise `/interviewly:interview <project> deep-dive`, since the guide is already written
    8. No `## Pitch` in `stories.md` → `/interviewly:walkthrough pitch`
    9. No stories in `stories.md` (a `## Pitch` alone isn't a story), or its coverage matrix has a gap → `/interviewly:stories`
    10. Otherwise → `/interviewly:interview mixed bar-raiser <one level above the target level; staff stays staff>`

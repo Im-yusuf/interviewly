@@ -27,6 +27,9 @@ input, through a heredoc with a quoted delimiter, or in a file with --file.
   share SESSION.json [--open]     1200x630 share card (PNG when Chrome is installed)
   check                           validate every JSON file (not the cloned repos/), the shape of the profile,
                                   projects, config and topics, and the dates in session and debrief file names
+  doctor                          health check for a bug report: versions and counts only, no names or paths
+  count SESSION.md [--q N]        words, spoken time and "I" / "we" counts of the main answer in the last (or Nth)
+                                  question of a session file, for walkthrough and pitch feedback
   audit-plan [--all]              which CV lines the audit must (re)check: new or changed lines, and lines
                                   whose project's code analysis is newer than their last check
   audit-merge PART.json...        merge assessed claims into audit.json and render audit.md
@@ -457,13 +460,14 @@ def due_day(topic, day, plan=None):
     The stored next_due doesn't change."""
     due = topic.get("next_due", day.isoformat())
     countdown = (plan or {}).get("countdown")
-    if (plan or {}).get("days_left") and due >= countdown["date"]:
+    if countdown and countdown["days"] >= 0 and due >= countdown["date"]:
         interview = parse_day(countdown["date"])
         history = topic.get("history") if isinstance(topic.get("history"), list) else []
         last = parse_day(history[-1].get("date")) if history and isinstance(history[-1], dict) else None
         if last and last < interview:
             days = (interview - last).days
-            due = min(due, (last + dt.timedelta(days=interview_gap(days, topic["last_score"], days))).isoformat())
+            if days > 1 or countdown["days"] > 0:   # on the day itself, yesterday's practice was the review before it
+                due = min(due, (last + dt.timedelta(days=interview_gap(days, topic["last_score"], days))).isoformat())
         else:   # no practice date to go by: the day before
             due = min(due, (interview - dt.timedelta(days=1)).isoformat())
     return due
@@ -508,7 +512,7 @@ def relevance_scorer(profile):
     lower = text.lower()
     wanted = "\n".join(line for line in text.splitlines() if REQUIREMENT_LINE.search(line))
     names = {s["slug"]: s["name"] for s in profile["skills"]}
-    status = {s["slug"]: s.get("status") for s in profile["skills"]}
+    status = {s["slug"]: s.get("status") if isinstance(s.get("status"), str) else None for s in profile["skills"]}
     names.update({p["slug"]: p["name"] for p in load_index()})
     weak = {"gap": 2, "cv-only": 1}
     counts, scores = {}, {}
@@ -627,8 +631,11 @@ def pick_due(topics, day, plan, limit=None, match=None, fill=False, new=None):
     practised one with the next_due it's going by (due_day)."""
     allowance = new_allowance(topics, day, plan) if new is None else new
     if match:
-        needle = match.lower()
-        topics = [t for t in topics if needle in " ".join(str(t.get(k) or "") for k in ("id", "skill", "project", "label")).lower()]
+        # a slug matches its own topics only ("go" isn't "django" or "algorithm"); other text falls back to a search
+        needle = match.strip().lower()
+        low = lambda t, k: str(t.get(k) or "").lower()
+        exact = [t for t in topics if needle in (low(t, "skill"), low(t, "project"), low(t, "id"), low(t, "id").split("/")[0])]
+        topics = exact or [t for t in topics if needle in " ".join(low(t, k) for k in ("id", "skill", "project", "label"))]
     topics = [t if is_new(t) else dict(t, next_due=due_day(t, day, plan)) for t in topics]
     weakest = lambda t: (t["last_score"], t.get("next_due", ""))
     queue = [dict(t, kind="review") for t in sorted((t for t in topics if is_due(t, day)), key=weakest)]
@@ -848,13 +855,14 @@ def nudge_message(day):
 
 # ---------- incremental CV audit ----------
 
+REPEATED_ID = re.compile(r"c-[0-9a-f]{8}-\d+")   # the second and later copies of a line the CV repeats
 RISK_ORDER = {"high": 0, "medium": 1, "low": 2}
 EVIDENCE_ORDER = {"contradicted": 0, "none": 1, "partial": 2, "in code": 3}
 
 
 def plain_md(text):
     text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
-    return re.sub(r"\*\*|__|`|(?<![\w*])\*(?!\s)|(?<!\s)\*(?![\w*])", "", text).strip()
+    return re.sub(r"\*\*|__|`|(?<![\w*])\*(?!\s)|(?<!\s)\*(?![\w*])|(?<!\w)_(?=\S)|(?<=\S)_(?!\w)", "", text).strip()
 
 
 def claim_id(text):
@@ -1102,8 +1110,11 @@ def cmd_audit_plan(args):
     for c in claims:
         entry = None if args.all else known.get(c["id"])
         slug = safe_slug(entry.get("project")) if entry else None
+        repeated = bool(REPEATED_ID.fullmatch(c["id"])) or any(k.startswith(c["id"] + "-") for k in known)
         if entry is None:
             recheck.append(dict(c, reason="new or changed"))
+        elif repeated and entry.get("heading") != c["heading"]:
+            recheck.append(dict(c, reason="now under another role or project"))
         elif slug and changed_since(home() / "projects" / f"{slug}.md", entry.get("audited")):
             recheck.append(dict(c, reason="code analysis updated", project=slug))
         else:
@@ -1171,22 +1182,43 @@ def cmd_audit_merge(args):
     json_path, md_path = audit_paths()
     claims, skills = cv_items(read_cv())
     current = {c["id"]: c for c in claims}
-    parts = [(part, *load_part(part)) for part in args.parts]
+    import glob
+    paths = [match for part in args.parts
+             for match in (sorted(glob.glob(part)) if glob.has_magic(part) and not os.path.exists(part) else [part])]
+    if not paths:
+        raise StateError(f"no part files match {', '.join(args.parts)}")
+    parts = [(part, *load_part(part)) for part in paths]
+
+    def written(part):
+        try:
+            return os.path.getmtime(part[0])
+        except OSError:
+            return 0
+    parts.sort(key=written)   # oldest first, so the newest assessment of a line is the one kept
     with state_lock():
         store = load_store()
         now = now_utc()
         updated = 0
+        seen = {}
         for part, assessed, overview in parts:
             for c in assessed:
                 cid = inline(c.get("id")) or claim_id(inline(c.get("text")))
                 if cid not in current:
                     print(f"skipped {cid}: not a line in cv.md (pass the id from audit-plan)", file=sys.stderr)
                     continue
+                if cid in seen and seen[cid] != part:
+                    print(f"{cid} is assessed in {Path(seen[cid]).name} and {Path(part).name}: kept the newer file's",
+                          file=sys.stderr)
+                seen[cid] = part
                 fields = {k: v for k, v in c.items() if k not in ("id", "text")}
                 store["claims"][cid] = {**current[cid], **fields, "id": cid, "audited": now}
                 updated += 1
-            store["overview"].update({str(k): markdown_block(v) for k, v in overview.items() if v not in (None, "", [], {})})
-        store["claims"] = {k: v for k, v in store["claims"].items() if k in current}
+            for k, v in overview.items():
+                if v in (None, "", [], {}):
+                    store["overview"].pop(str(k), None)   # "nothing to report" clears what an earlier audit said
+                else:
+                    store["overview"][str(k)] = markdown_block(v)
+        store["claims"] = {k: {**v, **current[k]} for k, v in store["claims"].items() if k in current}
         missing = [c["id"] for c in claims if c["id"] not in store["claims"]]
         store["skills_hash"] = hashlib.sha1("\n".join(skills).encode()).hexdigest()[:8]
         store["audited"] = now
@@ -1377,7 +1409,7 @@ def cmd_apply(args):
         source = norm_source(session if isinstance(session, str) and session.strip()
                              else f"sessions/{path.with_suffix('.md').name}")
         capped = capped_threads(review)
-        scheduled = []
+        scheduled, graded = [], []
         threads = review.get("threads")
         for position, thread in enumerate(threads if isinstance(threads, list) else [], 1):
             if not isinstance(thread, dict) or not thread.get("topic") or thread.get("score") in (None, ""):
@@ -1395,10 +1427,23 @@ def cmd_apply(args):
                 print(f"capped {thread['topic']} at 2, not {score}: thread {n} has a {flag} flag, and "
                       "the rubric scores a bluffed answer 2 at most", file=sys.stderr)
                 score = 2
+            graded.append((thread, score))
+        lowest = {}   # two threads on one topic count once, at the lower score, as several scores in a day do
+        for thread, score in graded:
+            lowest[thread["topic"]] = min(score, lowest.get(thread["topic"], 4))
+        for thread, _ in graded:
+            if thread["topic"] not in lowest:
+                continue   # a later thread on a topic this session has already scheduled
+            score = lowest.pop(thread["topic"])
             existing = next((t for t in data["topics"] if isinstance(t, dict) and t.get("id") == thread["topic"]), None)
             previous, applied = score_before(existing, source)
             if applied:
                 topic = existing  # already applied from this session: don't count the same answer twice
+                mine = [h.get("score") for h in existing.get("history") or []
+                        if isinstance(h, dict) and norm_source(h.get("source")) == source]
+                if mine and mine[-1] != score:
+                    print(f"left {thread['topic']} at {mine[-1]}, not {score}: this session is already applied "
+                          "(`iv score` changes a topic's schedule)", file=sys.stderr)
             else:
                 try:
                     topic = record_score(data, thread["topic"], score, source, {k: thread.get(k) for k in SCORE_FIELDS},
@@ -1518,7 +1563,7 @@ def cmd_share(args):
     if png:
         print(png)
     else:
-        print("no Chrome, Chromium or Edge found: open the HTML file and take a screenshot instead", file=sys.stderr)
+        print("no Chrome, Chromium, Edge or Brave found: open the HTML file and take a screenshot instead", file=sys.stderr)
     if args.open:
         import webbrowser
         webbrowser.open((png or page).as_uri())
@@ -1579,6 +1624,9 @@ def shape_problems(name, data):
                 out.append(f"bad profile.json: skill #{i} is {short(repr(s), 40)}, not an object with name, slug and status")
             elif not text_or_none(s.get("slug")):
                 out.append(f"bad profile.json: skill #{i} ({s.get('name')!r}) has no slug")
+            elif s.get("status") is not None and not isinstance(s["status"], str):
+                out.append(f"bad profile.json: skill #{i} ({s.get('name')!r}) has status {short(repr(s['status']), 40)}, "
+                           "not strong, cv-only, code-only or gap")
         target = data.get("active_target")
         if target is not None and not safe_slug(target):
             out.append(f"bad profile.json: active_target {target!r} isn't a file name in targets/")
@@ -1604,12 +1652,15 @@ def shape_problems(name, data):
     return out
 
 
-def cmd_check(args):
-    problems = []
+def state_findings():
+    """What `iv check` reports, in order: ("problem", text) for each fault and ("note", text) for each remark."""
+    found = []
 
     def problem(text):
-        problems.append(text)
-        print(text)
+        found.append(("problem", text))
+
+    def note(text):
+        found.append(("note", text))
 
     root = home()
     parsed = {}
@@ -1633,19 +1684,170 @@ def cmd_check(args):
                 name = t.get("id") if isinstance(t, dict) and isinstance(t.get("id"), str) and t.get("id") else f"#{i}"
                 problem(f"bad topic: {name}: {issue}")
     elif topics_path().exists() and (root / "topics.json.bak").exists():
-        print("note: until topics.json is fixed, iv reads topics.json.bak (the version before the last change); "
-              "the next score or seed rewrites topics.json from it")
+        note("note: until topics.json is fixed, iv reads topics.json.bak (the version before the last change); "
+             "the next score or seed rewrites topics.json from it")
     for folder in ("sessions", "debriefs"):
         for f in sorted((root / folder).glob("*")):
             m = DATE_PREFIX.match(f.name)
             if m and not file_day(f.name):
                 problem(f"bad file name: {folder}/{f.name}: {m.group(1)} isn't a real date")
+    profile = parsed.get(root / "profile.json")
+    target = profile.get("active_target") if isinstance(profile, dict) else None
+    if target is not None and safe_slug(target):
+        target_md = root / "targets" / f"{target}.md"
+        if not target_md.exists():
+            problem(f"bad profile.json: active_target {target!r} has no file targets/{target}.md")
+        else:
+            when = str(frontmatter(target_md).get("interview_date") or "").strip()
+            if when and not is_iso_date(when[:10]):
+                problem(f"bad target: targets/{target}.md: interview_date {when!r} isn't a YYYY-MM-DD date, so there "
+                        "is no countdown and practice isn't scheduled around the interview")
     marker = root / ".nudge-error"
     if marker.exists():
-        print(f"note: the start-of-session reminder failed ({read_text(marker, errors='ignore').strip()}); "
-              "it tries again at the next session")
-    print("ok" if not problems else f"{len(problems)} problem(s)")
+        note(f"note: the start-of-session reminder failed ({read_text(marker, errors='ignore').strip()}); "
+             "it tries again at the next session")
+    return found
+
+
+def cmd_check(args):
+    found = state_findings()
+    for _, text in found:
+        print(text)
+    problems = sum(kind == "problem" for kind, _ in found)
+    print("ok" if not problems else f"{problems} problem(s)")
     sys.exit(1 if problems else 0)
+
+
+SPOKEN_WPM = 140   # words a minute spoken aloud, as the rubric and the walkthrough skill assume
+ANSWER_LABEL = re.compile(r"^\*\*Answer:\*\*[ \t]*", re.M)
+NEXT_LABEL = re.compile(r"^(?:\*\*[^*\n]+:\*\*|## )", re.M)
+
+
+def count_answer(text, question=None):
+    """Words, spoken seconds and "I" / "we" counts of the first answer under the last `## Q` heading (or the
+    Nth). Counting by eye is often a fifth out, and the walkthrough's score depends on the length."""
+    blocks = re.split(r"^## Q", text, flags=re.M)[1:]
+    if not blocks:
+        raise StateError("no `## Q` question in that session file yet")
+    if question is not None and not 1 <= question <= len(blocks):
+        raise StateError(f"that session has {len(blocks)} question(s), so there is no question {question}")
+    block = blocks[-1 if question is None else question - 1]
+    start = ANSWER_LABEL.search(block)
+    if not start:
+        raise StateError("that question has no `**Answer:**` line yet")
+    rest = block[start.end():]
+    stop = NEXT_LABEL.search(rest)
+    answer = rest[:stop.start()] if stop else rest
+    words = re.findall(r"[^\W_]+(?:['’.-][^\W_]+)*", answer)
+    low = [w.lower().replace("’", "'") for w in words]
+    seconds = round(len(words) * 60 / SPOKEN_WPM)
+    return {"words": len(words), "seconds": seconds,
+            "spoken": f"{seconds // 60} min {seconds % 60} s" if seconds >= 60 else f"{seconds} s",
+            "i": sum(w == "i" or w.startswith("i'") for w in low),
+            "we": sum(w == "we" or w.startswith("we'") for w in low)}
+
+
+def cmd_count(args):
+    path = session_path(args.session)
+    print(json.dumps(count_answer(read_text(path), args.q)))
+
+
+def plugin_version():
+    """The version in whichever manifest this copy of the plugin has (Claude Code, Antigravity or Codex)."""
+    root = Path(__file__).resolve().parents[1]
+    for manifest in (".claude-plugin/plugin.json", "plugin.json", ".codex-plugin/plugin.json"):
+        try:
+            version = json.loads(read_text(root / manifest)).get("version")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(version, str) and version:
+            return version
+    return "unknown"
+
+
+def tool_version(name):
+    """`git version 2.44.0` -> "2.44.0"; None when the tool isn't installed or doesn't answer."""
+    import shutil
+    import subprocess
+    if not shutil.which(name):
+        return None
+    try:
+        out = subprocess.run([name, "--version"], capture_output=True, timeout=5, check=False).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    found = re.search(r"\d+(?:\.\d+)+", out.decode("utf-8", "replace"))
+    return found.group(0) if found else "found"
+
+
+def cmd_doctor(args):
+    """A health check that is safe to paste into a public bug report: versions, yes/no answers and counts.
+    Never a name, a slug, a path or anything from the CV. Lines start `ok`, `!` (needs fixing) or `-` (optional)."""
+    import platform
+    import shutil
+    import render
+    global QUIET
+    QUIET = True   # a warning about a broken file would name its path
+    lines = []
+
+    def line(mark, text):
+        lines.append(f"{mark:<3}{text}")
+
+    def count(fn):
+        try:
+            return fn()
+        except (StateError, OSError, ValueError, TypeError, AttributeError):
+            return None
+
+    def some(number, noun):
+        return f"{number} {noun}" + ("" if number == 1 else "s")
+
+    version = ".".join(str(part) for part in sys.version_info[:3])
+    line("ok" if sys.version_info >= (3, 8) else "!", f"Python {version} (3.8 or newer needed)")
+    git = tool_version("git")
+    line("ok" if git else "!", f"git {git}" if git else "git: not found (needed to clone repos and to see who wrote what)")
+    gh = tool_version("gh")
+    line("ok" if gh else "-", f"GitHub CLI {gh}" if gh else "GitHub CLI (gh): not found (only needed for private repos)")
+    line("ok" if render.find_browser() else "-", "Browser for share images and some CV PDFs: "
+         + ("found" if render.find_browser() else "not found (Chrome, Chromium, Edge or Brave)"))
+
+    root = home()
+    where = "custom location (INTERVIEWLY_HOME)" if os.environ.get("INTERVIEWLY_HOME") else "default location"
+    if not root.is_dir():
+        line("-", f"Home folder: {where}, not created yet (run /interviewly:start)")
+    else:
+        private = os.name != "posix" or not (root.stat().st_mode & 0o077)
+        line("ok" if private else "!", f"Home folder: {where}, " + ("private" if private else "readable by other accounts"))
+        if not (root / "profile.json").exists():
+            line("-", "Profile: not set up yet (run /interviewly:start)")
+        else:
+            projects = count(lambda: [p for p in load_index() if isinstance(p, dict)])
+            topics = count(lambda: [t for t in load_topics()["topics"] if isinstance(t, dict)])
+            parts = ["Profile: set up"]
+            if projects is not None:
+                parts.append(f"{some(len(projects), 'project')} ({sum(bool(p.get('dossier')) for p in projects)} analysed)")
+            if topics is not None:
+                parts.append(f"{some(len(topics), 'topic')} ({sum(t.get('last_score') is not None for t in topics)} practised)")
+            parts.append(some(len(list((root / "sessions").glob("*.md"))), "session"))
+            parts.append(some(len(list((root / "targets").glob("*.md"))), "job target"))
+            line("ok" if projects is not None and topics is not None else "!", " · ".join(parts))
+        config = count(load_config) or {}
+        failed = root / ".nudge-error"
+        if config.get("nudge") is False:
+            line("ok", "Reminder: off")
+        elif failed.exists():
+            # the saved line is "<date> <ErrorType>: <message>"; the message can hold a path, so it stays out
+            when = re.match(r"(\d{4}-\d{2}-\d{2}) (\w+)", read_text(failed, errors="ignore"))
+            line("!", "Reminder: on, but it last failed" + (f" on {when.group(1)} ({when.group(2)})" if when else ""))
+        elif not shutil.which("bash"):
+            line("-", "Reminder: on, but bash wasn't found, so it can't run in Claude Code or Codex")
+        else:
+            line("ok", "Reminder: on")
+        problems = sum(kind == "problem" for kind, _ in state_findings())
+        line("!" if problems else "ok", f"State files: {some(problems, 'problem')} (`check` lists them)" if problems
+             else "State files: no problems")
+    print(f"Interviewly {plugin_version()} health check")
+    print("\n".join(lines))
+    print(f"System: {platform.system()} {platform.release()} {platform.machine()}")
 
 
 def count_arg(low):
@@ -1707,6 +1909,11 @@ def main():
     c.add_argument("--open", action="store_true")
     c.set_defaults(fn=cmd_dashboard)
     sub.add_parser("check").set_defaults(fn=cmd_check)
+    sub.add_parser("doctor").set_defaults(fn=cmd_doctor)
+    c = sub.add_parser("count")
+    c.add_argument("session")
+    c.add_argument("--q", type=count_arg(1), help="which question (default: the last)")
+    c.set_defaults(fn=cmd_count)
     c = sub.add_parser("audit-plan")
     c.add_argument("--all", action="store_true", help="recheck every line")
     c.set_defaults(fn=cmd_audit_plan)
@@ -1723,6 +1930,8 @@ def main():
         args.fn(args)
     except StateError as e:
         sys.exit(str(e))
+    except OSError as e:   # a read-only or full disk, a sandbox that blocks writes
+        sys.exit(f"iv {args.command}: {e}")
 
 
 if __name__ == "__main__":

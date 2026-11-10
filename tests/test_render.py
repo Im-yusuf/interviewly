@@ -111,7 +111,14 @@ class ShareCardTest(unittest.TestCase):
         self.assertIn("Mock interview · Deep dive · Taskly API", render.share_card(review, show_focus=True))
 
     def test_label_is_a_rubric_label_or_worked_out_from_the_score(self):
-        self.assertIn("Nearly there", render.share_card(self.review(label=" Nearly there ")))
+        self.assertIn("Nearly there", render.share_card(self.review(score=3.1, label=" Nearly there ")))
+        mismatch = render.share_card(self.review(score=1.7, label="Interview-ready"))   # the label follows the score
+        self.assertIn("Not ready yet", mismatch)
+        self.assertNotIn("Interview-ready", mismatch)
+        card = render.report_card(self.review(score=1.7, label="Interview-ready"))
+        self.assertIn("Not ready yet", card)
+        self.assertNotIn(">Interview-ready<", card)
+        self.assertIn(">Solid on the basics<", render.report_card(self.review(score=3.1, label="Solid on the basics")))
         made_up = render.share_card(self.review(label="Bluffed the reporting numbers"))
         self.assertNotIn("Bluffed", made_up)
         self.assertIn("Interview-ready", made_up)
@@ -161,6 +168,20 @@ class DashboardTest(unittest.TestCase):
         for days, when in ((0, "today"), (1, "tomorrow"), (2, "in 2 days")):
             page = render.dashboard(stats(countdown={"company": "Acme", "days": days}))
             self.assertIn(f"Acme interview {when}<", page)
+
+    def test_recent_sessions_show_names_not_slugs(self):
+        page = render.dashboard(stats(
+            projects=[{"slug": "fastapi-todo", "name": "Taskly API", "readiness": None, "tested": 0, "total": 3, "due": 0}],
+            skills=[{"slug": "ffmpeg", "name": "FFmpeg", "status": "strong", "readiness": None, "tested": 0, "total": 1, "due": 0}],
+            sessions=[{"date": "2026-11-08", "mode": "deep-dive", "focus": "fastapi-todo", "score": 3.0},
+                      {"date": "2026-11-09", "mode": "fundamentals", "focus": "ffmpeg", "score": 2.0},
+                      {"date": "2026-11-10", "mode": "walkthrough", "focus": "pitch", "score": None},
+                      {"date": "2026-11-10", "mode": "drill", "focus": ["a", "b"], "score": None}]))
+        recent = page[page.index("Recent sessions"):]
+        self.assertIn("<td>Taskly API</td>", recent)
+        self.assertIn("<td>FFmpeg</td>", recent)
+        self.assertIn("<td>pitch</td>", recent)
+        self.assertNotIn("<td>fastapi-todo</td>", recent)
 
     def test_old_stats_without_coverage_or_mastery(self):
         old = stats(overall=60, topics_tested=8, topics_total=30)

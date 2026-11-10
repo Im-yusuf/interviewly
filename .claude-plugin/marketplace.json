@@ -11,7 +11,15 @@
       "source": "./",
       "description": "Mock interviews about your own code. Interviewly reads your CV and your projects, asks the follow-ups real interviewers ask, checks every CV claim, and turns code you vibe coded into 10-minute lessons. You built it. Now explain it.",
       "category": "productivity",
-      "homepage": "https://github.com/Im-yusuf/interviewly"
+      "homepage": "https://github.com/Im-yusuf/interviewly",
+      "tags": [
+        "interview-prep",
+        "mock-interview",
+        "career",
+        "cv",
+        "resume",
+        "learning"
+      ]
     }
   ]
 }

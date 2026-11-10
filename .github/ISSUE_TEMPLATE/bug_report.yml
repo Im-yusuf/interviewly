@@ -38,13 +38,9 @@ body:
       placeholder: Claude Code 2.x / Codex / Antigravity
     validations:
       required: true
-  - type: input
-    id: interviewly-version
+  - type: textarea
+    id: doctor
     attributes:
-      label: Interviewly version
-      description: In Claude Code, `/plugin` lists it; in Codex, `codex plugin list`; in Antigravity, the `version` in `~/.gemini/config/plugins/interviewly/plugin.json`.
-  - type: input
-    id: os
-    attributes:
-      label: OS and Python version
-      placeholder: macOS 15, Python 3.12 (`python3 --version`)
+      label: Health check
+      description: Paste what `/interviewly:setup doctor` prints. It has versions and counts only, no names, paths or CV text. If it won't run, give your Interviewly version, OS and Python version instead.
+      render: text

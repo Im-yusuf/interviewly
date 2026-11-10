@@ -335,6 +335,67 @@ class BuiltInWriterTest(unittest.TestCase):
             self.assertEqual(checks[name]["status"], "pass", f"{name}: {checks[name]['detail']}")
         self.assertNotIn("reading order", checks)
 
+    REVIEW_CV = """# Jordan Vale
+Leeds, UK | +44 7700 900456 | [jordan.vale@example.com](mailto:jordan.vale@example.com) | [github.com/jordan-vale-example](https://github.com/jordan-vale-example)
+
+## Summary
+{summary}
+
+## Experience
+### Software Engineer | Acme Robotics | Leeds, UK | Jul 2021 – Present
+- Built the planner service in Python and cut planner latency by 30%
+
+## Projects
+### {project}
+- Built the API and its background workers, with tests in pytest
+
+## Education
+### BSc Computer Science | Northbridge University | Sep 2018 – Jun 2021
+"""
+
+    def reviewed(self, summary="Backend engineer with five years of experience in robotics.",
+                 project="Taskly | Personal project | Jan 2023 – Mar 2023"):
+        """(checks by name, the PDF) for the review CV with this summary and project line."""
+        self.src.write_text(self.REVIEW_CV.format(summary=summary, project=project), encoding="utf-8")
+        result, out = self.build()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = ats_check.analyse(out, source=self.src, extra_parsers=False)
+        return {r["check"]: r for r in report["results"]}, pdf_text.Document(out)
+
+    def assertPasses(self, checks, *names):
+        for name in names:
+            self.assertEqual(checks[name]["status"], "pass", f"{name}: {checks[name]['detail']}")
+
+    def test_a_long_role_line_wraps_at_its_spaces(self):
+        checks, doc = self.reviewed(project="Taskly | Task-management REST API with FastAPI, SQLAlchemy and PostgreSQL, "
+                                            "deployed on AWS with Docker and GitHub Actions | Jan 2023 – Mar 2023")
+        self.assertPasses(checks, "fidelity")
+        self.assertIn("AWS", doc.text().split())   # it used to come out as "A" / "WS", cut between two letters
+
+    def test_correct_links_and_text_are_not_reported_as_lost(self):
+        checks, _ = self.reviewed(summary="Backend engineer. References on request: jordan.vale@example.com. Code at "
+                                          "**github.com/jordan-vale-example/planner**, with state\u2011of\u2011the\u2011art "
+                                          "tooling and a phone number pasted as \u202a+44 7700 900456\u202c.")
+        self.assertPasses(checks, "links", "fidelity")
+
+    def test_link_addresses_with_brackets_or_accents(self):
+        checks, doc = self.reviewed(summary="See [Foo (bar)](https://en.wikipedia.org/wiki/Foo_(bar)) and "
+                                            "[linkedin.com/in/zo\u00eb-example](https://www.linkedin.com/in/zo\u00eb-example).")
+        targets = {link["uri"] for link in doc.links}
+        self.assertIn("https://en.wikipedia.org/wiki/Foo_(bar)", targets)
+        self.assertIn("https://www.linkedin.com/in/zo%C3%AB-example", targets)   # escaped, so every viewer opens it
+        self.assertPasses(checks, "links")
+
+    def test_bold_inside_a_word_counts_as_bold(self):
+        checks, _ = self.reviewed(summary="Backend engineer with experience in **Python**/**Go** services and "
+                                          "**FastAPI**-based tools.")
+        self.assertPasses(checks, "bold")
+
+    def test_a_paragraph_that_starts_and_ends_in_italics_keeps_its_words(self):
+        checks, doc = self.reviewed(summary="*Backend engineer* with five years of experience in *robotics*")
+        self.assertNotIn("*", doc.text())
+        self.assertPasses(checks, "fidelity")
+
     def test_text_links_and_bullet_order(self):
         _, out = self.build()
         doc = pdf_text.Document(out)

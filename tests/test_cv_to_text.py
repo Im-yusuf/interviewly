@@ -127,6 +127,22 @@ class CvToTextTest(unittest.TestCase):
         self.assertIn("Links in the file:\n- the demo: https://taskly.example.com\n"
                       "- my GitHub: https://github.com/sam-rivera-example", text)
 
+    def test_docx_hyperlink_field_split_over_runs(self):
+        """Word may write a HYPERLINK field's instruction in pieces: HYPERLINK "https://gitlab.com/ + jordan-vale-example"."""
+        w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        run = lambda inner: f"<w:r>{inner}</w:r>"
+        field = (run('<w:fldChar w:fldCharType="begin"/>') + run('<w:instrText xml:space="preserve"> HYPERLINK "https://gitlab.com/</w:instrText>')
+                 + run('<w:instrText>jordan-vale-example" </w:instrText>') + run('<w:fldChar w:fldCharType="separate"/>')
+                 + run("<w:t>GitLab</w:t>") + run('<w:fldChar w:fldCharType="end"/>'))
+        path = self.tmp / "field.docx"
+        with zipfile.ZipFile(path, "w") as z:
+            z.writestr("word/document.xml", f"<w:document {w}><w:body><w:p>{run('<w:t>Jordan Vale </w:t>')}{field}"
+                                            f"{run('<w:t> and more</w:t>')}</w:p></w:body></w:document>")
+        text = cv_to_text.docx_to_text(path)
+        self.assertIn("[GitLab](https://gitlab.com/jordan-vale-example)", text)
+        self.assertIn("and more", text)
+        self.assertNotIn("[and more]", text)   # the field ended
+
     def test_pdf_keeps_links_and_bold(self):
         path = self.tmp / "cv.pdf"
         path.write_bytes(pdf_fixture.sample_pdf(pdf_fixture.CONTENT + b"\n" + pdf_fixture.FILLER))

@@ -28,9 +28,9 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 In character as the interviewer, ask in one or two sentences, e.g. "Walk me through Taskly: what it is, how it works and what you did on it. Take about two minutes." Then one line out of character: *(Say it out loud and dictate it, or type it the way you'd say it. `skip` shows you a model walkthrough first.)* End your turn and wait.
 
-When the answer comes, log it word for word as `## Q1 · topic: <slug>/walkthrough · level: what`, then measure it (these go in the feedback, so be exact):
-- **Length:** the word count and the spoken time at 140 words a minute ("312 words ≈ 2 min 15 s").
-- **Ownership:** how many times they say "I" and how many times "we".
+When the answer comes, log it word for word as `## Q1 · topic: <slug>/walkthrough · level: what`, then measure it (these go in the feedback, so be exact). Run `iv count "<the session file>"` for the first two; never count by eye, which is often a fifth out:
+- **Length:** the word count and the spoken time at 140 words a minute ("312 words ≈ 2 min 14 s").
+- **Ownership:** how many times they say "I" and how many times "we" (it counts the English words; in another language, count those yourself).
 - **Jargon:** acronyms or tool names used without saying what they do.
 - **Shape:** which of these it covers, in order: the problem and who it's for → what it does → how it works (one real technical detail) → their own part → a decision and its trade-off → the result (a real number only if it's true) → what they'd change.
 
@@ -48,7 +48,7 @@ One question mark per question. No feedback until the end.
 
 ## 4. Score and teach
 
-Set `status: complete`. Score it straight away (it's short, so there's no separate reviewer) against `${CLAUDE_PLUGIN_ROOT}/references/rubric.md`, reading the four dimensions the way its **walkthrough** paragraph describes. The walkthrough and its follow-ups are one thread; apply the hint, skip and bluff caps.
+Set `status: complete`. Score it straight away (it's short, so there's no separate reviewer) against `${CLAUDE_PLUGIN_ROOT}/references/rubric.md`, reading the four dimensions the way its **walkthrough** paragraph describes. The walkthrough and its follow-ups are one thread; apply the rubric's caps.
 
 Show, in this order:
 1. **Score:** `n/4` with the rubric label, plus the measures in one line: "2 min 15 s (target 2:00) · 'I' ×4, 'we' ×11 · 2 unexplained terms".

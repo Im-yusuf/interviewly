@@ -388,6 +388,247 @@ Python, FastAPI, Redis
         self.assertEqual(result.returncode, 1)
         self.assertIn("invalid JSON", result.stdout)
 
+    # --- regression tests ---
+
+    def test_match_takes_a_slug_exactly_before_it_searches(self):
+        self.run_cli("seed", stdin=json.dumps([
+            {"id": "go/goroutine-leaks", "label": "How a goroutine leaks", "skill": "go"},
+            {"id": "django/orm-n-plus-one", "label": "N+1 queries in the ORM", "skill": "django"},
+            {"id": "fastapi-todo/sorting", "label": "Which sorting algorithm list_todos uses", "skill": "fastapi",
+             "project": "fastapi-todo"}]))
+        ids = lambda match: [t["id"] for t in json.loads(self.run_cli("due", "--new", "10", "--json", "--match", match))]
+        self.assertEqual(ids("go"), ["go/goroutine-leaks"])            # not djan-go, not al-go-rithm
+        self.assertEqual(ids("FastAPI"), ["fastapi-todo/sorting"])
+        self.assertEqual(ids("fastapi-todo"), ["fastapi-todo/sorting"])
+        self.assertEqual(ids("goroutine"), ["go/goroutine-leaks"])     # no slug by that name: a search, as before
+
+    def test_apply_counts_two_threads_on_one_topic_once_at_the_lower_score(self):
+        name = "sessions/2026-11-10-1900-deep-dive.json"
+        self.write(name, json.dumps({"session": "sessions/2026-11-10-1900-deep-dive.md", "threads": [
+            {"n": 1, "topic": "taskly/db-session", "score": 4}, {"n": 2, "topic": "taskly/db-session", "score": 1}]}))
+        rows = json.loads(self.run_cli("apply", name))
+        self.assertEqual([(r["topic"], r["score"], r["next_due"]) for r in rows], [("taskly/db-session", 1, "2026-11-11")])
+
+    def test_applying_a_session_again_says_when_it_leaves_a_score_alone(self):
+        name = "sessions/2026-11-10-1900-deep-dive.json"
+        review = {"session": "sessions/2026-11-10-1900-deep-dive.md", "flags": [{"type": "bluff", "text": "Said NVENC"}],
+                  "threads": [{"n": 1, "topic": "clipper/encoder", "score": 4}]}
+        self.write(name, json.dumps(review))
+        self.run_cli("apply", name)                      # the flag names no thread, so nothing is capped
+        review["flags"][0]["thread"] = 1
+        self.write(name, json.dumps(review))
+        again = self.run_raw("apply", name)
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertIn("left clipper/encoder at 4, not 2: this session is already applied", again.stderr)
+        self.assertEqual(self.topics()["clipper/encoder"]["last_score"], 4)
+
+    def test_reviews_brought_forward_stay_due_on_the_interview_day(self):
+        self.score("fastapi/b", 4, "sessions/2026-11-08-0900-drill.md", day="2026-11-08")
+        self.score("fastapi/c", 3, "sessions/2026-11-04-0900-drill.md", day="2026-11-04")
+        self.score("fastapi/c", 3, "sessions/2026-11-08-0900-drill.md", day="2026-11-08")
+        self.target("2026-11-14")
+        due = lambda day: sorted(t["id"] for t in json.loads(self.run_cli("due", "--json", day=day)))
+        self.assertEqual(due("2026-11-13"), ["fastapi/b", "fastapi/c"])
+        self.assertEqual(due("2026-11-14"), ["fastapi/b", "fastapi/c"])   # the interview morning
+        for topic, n in (("fastapi/b", 4), ("fastapi/c", 3)):
+            self.score(topic, n, "sessions/2026-11-13-0900-drill.md", day="2026-11-13")
+        self.assertEqual(due("2026-11-14"), [])   # practised the day before: not owed again on the day
+
+    def audited(self):
+        self.write("cv.md", "# Sam Rivera\n\n## Projects\n\n### Taskly API\n"
+                            "- Reduced p95 latency by 60% by moving database access to async\n")
+        return json.loads(self.run_cli("audit-plan"))["recheck"][0]["id"]
+
+    def test_an_empty_overview_section_clears_what_an_earlier_audit_said(self):
+        cid = self.audited()
+        self.write("part-1.json", json.dumps({"claims": [{"id": cid, "risk": "high", "evidence": "contradicted"}],
+                   "overview": {"summary": "One risky claim.", "rewritten_cvs": "- cv/acme: the 60% claim is contradicted."}}))
+        self.run_cli("audit-merge", str(self.home / "part-1.json"))
+        self.assertIn("cv/acme", (self.home / "audit.md").read_text(encoding="utf-8"))
+        self.write("overview.json", json.dumps({"overview": {"summary": "All fixed.", "rewritten_cvs": ""}}))
+        self.run_cli("audit-merge", str(self.home / "overview.json"))
+        page = (self.home / "audit.md").read_text(encoding="utf-8")
+        self.assertIn("All fixed.", page)
+        self.assertNotIn("cv/acme", page)
+
+    def test_the_newest_part_wins_when_two_assess_one_line(self):
+        cid = self.audited()
+        claim = lambda risk, detail: json.dumps({"claims": [{"id": cid, "risk": risk, "evidence_detail": detail}]})
+        self.write(".audit/part-2.json", claim("medium", "OLD: partly async"))    # left by an interrupted run
+        self.write(".audit/part-1.json", claim("high", "NEW: sync SQLAlchemy only, app/database.py:6"))
+        old, new = (str(self.home / ".audit" / n) for n in ("part-2.json", "part-1.json"))
+        os.utime(old, (1_000_000_000, 1_000_000_000))
+        merged = self.run_raw("audit-merge", new, old)   # in the order a shell glob gives them
+        self.assertEqual(merged.returncode, 0, merged.stderr)
+        self.assertIn("kept the newer file's", merged.stderr)
+        page = (self.home / "audit.md").read_text(encoding="utf-8")
+        self.assertIn("NEW: sync SQLAlchemy only", page)
+        self.assertNotIn("OLD: partly async", page)
+
+    def test_a_repeated_cv_line_is_rechecked_when_its_twin_is_deleted(self):
+        line = "- Wrote integration tests and set up GitHub Actions CI\n"
+        two = ("# Sam Rivera\n\n## Experience\n\n### Backend Developer, Brightline Media (2024 - present)\n" + line
+               + "\n### Intern, Northbridge Labs (2023)\n" + line)
+        self.write("cv.md", two)
+        first, second = json.loads(self.run_cli("audit-plan"))["recheck"]
+        self.write("part.json", json.dumps({"claims": [
+            {"id": first["id"], "risk": "high", "evidence": "contradicted", "evidence_detail": "Brightline repo has no CI config"},
+            {"id": second["id"], "risk": "low", "evidence": "in code"}]}))
+        self.run_cli("audit-merge", str(self.home / "part.json"))
+        self.assertEqual(json.loads(self.run_cli("audit-plan"))["recheck"], [])
+        self.write("cv.md", two.split("### Backend")[0] + "### Intern, Northbridge Labs (2023)\n" + line)
+        plan = json.loads(self.run_cli("audit-plan"))   # the Brightline role is gone: its id now names the intern's line
+        self.assertEqual([(c["heading"], c["reason"]) for c in plan["recheck"]],
+                         [("Intern, Northbridge Labs (2023)", "now under another role or project")])
+
+    def test_a_cv_lines_id_does_not_depend_on_its_emphasis(self):
+        ids = {interviewly.claim_id(text) for text in (
+            "Built the *reporting* service", "Built the _reporting_ service", "Built the **reporting** service",
+            "Built the reporting service")}
+        self.assertEqual(len(ids), 1)
+        self.assertNotEqual(interviewly.claim_id("Tuned max_connections and pool_size"),
+                            interviewly.claim_id("Tuned maxconnections and poolsize"))   # snake_case isn't emphasis
+
+    def test_a_skill_status_that_is_not_text_is_reported_and_harmless(self):
+        self.write("profile.json", json.dumps({"active_target": "acme", "skills": [
+            {"name": "FastAPI", "slug": "fastapi", "status": ["strong"]}]}))
+        self.write("targets/acme.md", "---\ncompany: Acme\n---\nMust have: FastAPI\n")
+        self.seed("fastapi/routing", skill="fastapi")
+        self.assertIn("fastapi/routing", self.run_cli("due"))
+        bad = self.run_raw("check")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("has status ['strong'], not strong, cv-only, code-only or gap", bad.stdout)
+
+    def test_check_reports_an_active_target_it_cannot_use(self):
+        self.target("13 November 2026")
+        bad = self.run_raw("check")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("interview_date '13 November 2026' isn't a YYYY-MM-DD date", bad.stdout)
+        self.target("2026-11-13 14:00")
+        self.assertIn("ok", self.run_cli("check"))
+        (self.home / "targets" / "acme-backend-engineer.md").unlink()
+        gone = self.run_raw("check")
+        self.assertEqual(gone.returncode, 1)
+        self.assertIn("has no file targets/acme-backend-engineer.md", gone.stdout)
+
+    @unittest.skipIf(os.name == "nt" or (hasattr(os, "getuid") and os.getuid() == 0), "needs a folder it can make read-only")
+    def test_a_home_it_cannot_write_to_is_one_line_not_a_traceback(self):
+        self.seed("a/x")
+        os.chmod(self.home, 0o500)
+        try:
+            result = self.run_raw("score", "a/x", "3", "--source", "sessions/x.md")
+        finally:
+            os.chmod(self.home, 0o700)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertIn("iv score:", result.stderr)
+
+    @unittest.skipIf(os.name == "nt" or not shutil.which("bash"), "the hook is a shell script")
+    def test_the_reminder_hook_finds_python_under_another_name(self):
+        """Windows often has `python` or `py` and no working `python3`."""
+        self.write("profile.json", json.dumps({"name": "Sam Rivera", "skills": []}))
+        self.seed("taskly/auth")
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "python3").write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")   # a stub that never runs Python
+        os.chmod(bin_dir / "python3", 0o755)
+        os.symlink(sys.executable, bin_dir / "python")
+        env = {"PATH": str(bin_dir), "HOME": str(self.home), "INTERVIEWLY_HOME": str(self.home),
+               "INTERVIEWLY_TODAY": self.day, "CLAUDE_PLUGIN_ROOT": str(ROOT)}
+        hook = subprocess.run([shutil.which("bash"), str(ROOT / "hooks" / "nudge.sh")], capture_output=True,
+                              encoding="utf-8", env=env)
+        self.assertEqual(hook.returncode, 0, hook.stderr)
+        self.assertIn("1 new topic to learn today", json.loads(hook.stdout)["systemMessage"])
+
+    def test_count_measures_the_main_answer_of_a_walkthrough(self):
+        answer = ("I built Taskly, a task API. We deployed it with Docker, and I'm the one who wrote the reminders. "
+                  + "word " * 259 + "That's it.")   # 19 + 259 + 2 = 280 words: two minutes at 140 a minute
+        self.write("sessions/2026-11-10-0900-walkthrough.md",
+                   "---\nmode: walkthrough\n---\n\n## Q1 · topic: fastapi-todo/walkthrough · level: what\n"
+                   f"**Asked:** Walk me through Taskly.\n**Answer:** {answer}\n"
+                   "**Follow-up (why):** Which part was yours?\n**Answer:** I wrote we-never-count-this.\n"
+                   "**Hints:** 0 · **Skipped:** no\n\n## Q2 · topic: fastapi-todo/walkthrough · level: what\n"
+                   "**Asked:** Again.\n**Answer:** I'd say we built it\nover two lines.\n")
+        first = json.loads(self.run_cli("count", "sessions/2026-11-10-0900-walkthrough.md", "--q", "1"))
+        self.assertEqual(first, {"words": 280, "seconds": 120, "spoken": "2 min 0 s", "i": 2, "we": 1})
+        retry = json.loads(self.run_cli("count", "sessions/2026-11-10-0900-walkthrough.md"))   # the last question
+        self.assertEqual((retry["words"], retry["i"], retry["we"], retry["spoken"]), (8, 1, 1, "3 s"))
+        none = self.run_raw("count", "sessions/2026-11-10-0900-walkthrough.md", "--q", "3")
+        self.assertNotEqual(none.returncode, 0)
+        self.assertIn("there is no question 3", none.stderr)
+        self.assertNotIn("Traceback", none.stderr)
+
+    def test_audit_merge_expands_a_wildcard_the_shell_left_alone(self):
+        cid = self.audited()
+        self.write(".audit/part-1.json", json.dumps({"claims": [{"id": cid, "risk": "high", "evidence": "none"}]}))
+        merged = json.loads(self.run_cli("audit-merge", str(self.home / ".audit" / "*.json")))   # as PowerShell passes it
+        self.assertEqual((merged["updated"], merged["high"]), (1, 1))
+        nothing = self.run_raw("audit-merge", str(self.home / ".audit" / "none-*.json"))
+        self.assertNotEqual(nothing.returncode, 0)
+        self.assertIn("no part files match", nothing.stderr)
+
+    # --- doctor ---
+
+    def test_doctor_gives_counts_and_never_a_name_or_a_path(self):
+        self.write("profile.json", json.dumps({"name": "Sam Rivera", "active_target": "acme-backend-engineer", "skills": []}))
+        self.write("projects/index.json", json.dumps([
+            {"slug": "fastapi-todo", "name": "Taskly API", "dossier": "projects/fastapi-todo.md"},
+            {"slug": "ffmpeg-clipper", "name": "Clipper", "dossier": None}]))
+        self.write("targets/acme-backend-engineer.md", "---\ncompany: Acme\n---\n")
+        self.write("sessions/2026-11-09-1930-drill.md", "---\nmode: drill\n---\n")
+        self.seed("fastapi-todo/async-db", "fastapi-todo/auth")
+        self.score("fastapi-todo/async-db", 3, "sessions/2026-11-09-1930-drill.md")
+        self.write(".nudge-error", f"2026-11-09 OSError: [Errno 13] Permission denied: '{self.home}/topics.json'\n")
+        result = self.run_raw("doctor")
+        out = result.stdout
+        self.assertEqual(result.returncode, 0, result.stderr)
+        version = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
+        self.assertIn(f"Interviewly {version} health check", out)
+        self.assertIn("2 projects (1 analysed)", out)
+        self.assertIn("2 topics (1 practised)", out)
+        self.assertIn("1 session ·", out)
+        self.assertIn("1 job target", out)
+        self.assertIn("!  Reminder: on, but it last failed on 2026-11-09 (OSError)", out)
+        self.assertIn("ok State files: no problems", out)
+        for private in ("Sam", "Rivera", "Taskly", "Clipper", "fastapi", "acme", "Acme", str(self.home), self.home.name,
+                        "Permission denied"):
+            self.assertNotIn(private, out + result.stderr)
+
+    def test_doctor_counts_state_problems_without_naming_the_files(self):
+        self.write("profile.json", "{}")
+        self.write("topics.json", "{broken")
+        self.write("sessions/2026-13-40-0900-drill.md", "x")
+        result = self.run_raw("doctor")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("!  State files: 2 problems (`check` lists them)", result.stdout)
+        self.assertIn("!  Profile: set up", result.stdout)
+        self.assertNotIn("2026-13-40", result.stdout + result.stderr)
+        self.assertNotIn(str(self.home), result.stdout + result.stderr)
+
+    def test_doctor_before_setup_creates_nothing(self):
+        missing = self.home / "not-yet"
+        result = self.run_raw("doctor", env={"INTERVIEWLY_HOME": str(missing)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("not created yet (run /interviewly:start)", result.stdout)
+        self.assertNotIn("Reminder", result.stdout)
+        self.assertFalse(missing.exists())
+        self.write("config.json", '{"nudge": false}')
+        out = self.run_cli("doctor")
+        self.assertIn("-  Profile: not set up yet", out)
+        self.assertIn("ok Reminder: off", out)
+
+    def test_check_prints_the_same_report_as_before_the_doctor_shared_it(self):
+        self.write("config.json", '{"nudge": "yes"}')
+        self.write("sessions/2026-13-40-0900-drill.md", "x")
+        self.write(".nudge-error", "2026-11-09 ValueError: bad\n")
+        result = self.run_raw("check")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.splitlines(), [
+            "bad config.json: nudge is 'yes', not true or false",
+            "bad file name: sessions/2026-13-40-0900-drill.md: 2026-13-40 isn't a real date",
+            "note: the start-of-session reminder failed (2026-11-09 ValueError: bad); it tries again at the next session",
+            "2 problem(s)"])
+
 
     # --- review fixes ---
 

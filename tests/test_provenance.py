@@ -65,6 +65,22 @@ class ProvenanceTest(unittest.TestCase):
     def missing(self, repo):
         return self.git("rev-list", "--objects", "--missing=print", "HEAD", cwd=repo).count("\n?")
 
+    def test_without_identities_nobody_is_you_and_every_author_is_listed(self):
+        """Setup lists the authors before it knows which is the user, who may be a small contributor."""
+        for n in range(1, 13):
+            self.commit(f"mod{n}.py", 100 * n, f"Module {n}", author=(f"Teammate {n}", f"mate{n}@example.com"))
+        self.commit("notes.py", 30, "Notes")   # Sam: the fewest lines of all thirteen
+        r = provenance.analyse(self.repo, me=[])
+        self.assertEqual(r["authors_total"], 13)
+        self.assertIn("Sam Rivera", [a["name"] for a in r["authors"]])
+        self.assertEqual(set(r["share"].values()), {None})   # no "mine" before the user says who they are
+        text = provenance.summary(r)
+        self.assertIn("Sam Rivera <sam@example.com>", text)
+        self.assertIn("without AI credit / with AI credit", text)
+        self.assertNotIn("you / you with AI", text)
+        mine = provenance.summary(provenance.analyse(self.repo, me=["sam@example.com"]))
+        self.assertIn("biggest files (added lines: you / you with AI / others):", mine)
+
     def test_splits_lines_by_who_wrote_them(self):
         self.commit("app/main.py", 10, "Add the API by hand")
         self.commit("app/main.py", 30, "Add reminders\n\nCo-Authored-By: Claude <noreply@anthropic.com>")

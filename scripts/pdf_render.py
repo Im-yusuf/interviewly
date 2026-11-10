@@ -16,6 +16,7 @@ import time
 import unicodedata
 import zlib
 from pathlib import Path
+from urllib.parse import quote
 
 from pdf_text import Name, Ref, dumps, tounicode_cmap
 
@@ -257,6 +258,13 @@ def pieces(runs, bold=False, color=TEXT, nobreak=False, italic=True):
 
 
 BREAK_AFTER = "/-?&=._#"
+URL_SAFE = "%/:=&?~#+!$,;'@()*[]"   # left as they are in a link address; anything else outside ASCII is escaped
+NOWRAP_MAX = 40   # as in cv_to_pdf.py: a longer contact item or role part may wrap at its spaces
+
+
+def keep_together(runs):
+    """Whether a contact item or role part is short enough to hold on one line."""
+    return len("".join(text for text, *_ in runs)) <= NOWRAP_MAX
 
 
 def merge_chars(chars):
@@ -362,7 +370,7 @@ def build_boxes(model, density, fonts, width):
             for i, item in enumerate(b["items"]):
                 if i:
                     parts.append((f" {b['seps'][i - 1]} ", "R", None, SEP, False))
-                parts += pieces(item, color=GREY, nobreak=len(b["items"]) > 1)
+                parts += pieces(item, color=GREY, nobreak=len(b["items"]) > 1 and keep_together(item))
             boxes.append(text_box("P", parts, fs * 0.94, align="center", top=2 * k))
             header_end = len(boxes) - 1
         elif kind == "section":
@@ -376,7 +384,7 @@ def build_boxes(model, density, fonts, width):
             parts = pieces(b["parts"][0], bold=True)
             for p in b["parts"][1:]:
                 parts.append((" | ", "R", None, SEP, False))
-                parts += pieces(p, nobreak=True)
+                parts += pieces(p, nobreak=keep_together(p))
             box = text_box("H3", parts, fs, avail=width - (dw + 12 if date else 0),
                            top=(3 if b["first"] else 6) * k, bottom=k, keep_next=True, entry=b["entry"])
             if date:
@@ -565,7 +573,7 @@ def write(layout, path, title, author, lang):
                         objects[annot] = ({"Type": Name("Annot"), "Subtype": Name("Link"), "F": 4, "Border": [0, 0, 0],
                                            "Rect": [round(link_start, 2), round(baseline - desc * size, 2),
                                                     round(trimmed, 2), round(baseline + asc * size, 2)],
-                                           "A": {"Type": Name("Action"), "S": Name("URI"), "URI": url.encode("utf-8")}}, None)
+                                           "A": {"Type": Name("Action"), "S": Name("URI"), "URI": quote(url, safe=URL_SAFE).encode("ascii")}}, None)
                         link_start = None
                 x += w
         out.append("EMC")

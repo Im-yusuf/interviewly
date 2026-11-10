@@ -121,7 +121,7 @@ Facts worth quoting, with where they came from: endpoint count, number of tests,
 The components the user is least likely to be able to explain yet, highest risk first:
 | Component | Files | Risk | Why |
 |---|---|---|---|
-(risk: high / medium / low. High = mostly AI-credited or written by someone else, *and* non-trivial (concurrency, caching, auth, data model, tricky algorithms), *and* likely to come up in an interview. Use the probe points to judge "likely to come up".)
+(risk: high / medium / low. High = mostly AI-credited or written by someone else, *and* non-trivial (concurrency, caching, auth, data model, tricky algorithms), *and* likely to come up in an interview. Use the probe points to judge "likely to come up". With no git history, judge on the other two conditions alone, and say under "How it was built" that who wrote what isn't known.)
 ```
 
 When you've written the file, reply with no more than six lines: the dossier path, the stack, the three most interesting probe points, how many CV claims had no evidence in the code, and the AI share with the number of high explain-risk components.

@@ -170,15 +170,16 @@ def docx_part(root, rels_xml):
                                 and not 0xE000 <= int(code, 16) <= 0xF8FF:
                             parts.append(chr(int(code, 16)))
                     elif t == "instrText" and n.text:
-                        m = re.search(r'HYPERLINK\s+"([^"]+)"', n.text)
-                        if m:
-                            field["pending"] = m.group(1)
+                        field["instr"] = field.get("instr", "") + n.text
                     elif t == "fldChar":
                         kind = n.get(W + "fldCharType")
-                        if kind == "separate":
-                            field["url"], field["pending"] = field.get("pending"), None
+                        if kind == "begin":
+                            field["instr"] = ""
+                        elif kind == "separate":
+                            m = re.search(r'HYPERLINK\s+"([^"]+)"', field.get("instr", ""))
+                            field["url"], field["instr"] = (m.group(1) if m else None), ""
                         elif kind == "end":
-                            field["url"] = None
+                            field["url"], field["instr"] = None, ""
                 if parts:
                     runs.append(("".join(parts), bold, url or field.get("url")))
             elif tag in CONTAINERS:

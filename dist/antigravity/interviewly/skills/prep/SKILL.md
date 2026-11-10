@@ -21,7 +21,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 1. Write the guide
 
-Write `HOME_DIR/guides/<skill-slug>.md`:
+Write `HOME_DIR/guides/<skill-slug>.md` (if it's already there, read it first and keep what the user wrote into its gaps):
 
 ### What interviewers are checking
 Two or three lines on what a <level> interviewer wants to find out about this technology.
@@ -34,7 +34,7 @@ Two or three lines on what a <level> interviewer wants to find out about this te
 - **Q:** as an interviewer would phrase it
 - **A:** a model answer of at most 80 words, answer first
 - **They'll follow up with:** the likely next question
-- **Your angle:** a bridge to the user's own code, with a file reference (e.g. "In Taskly, `get_db` in `app/deps.py:9` is a generator dependency, so…"). If they have no evidence for this, write "No evidence in your code: answer from first principles and say so." For a `gap` skill, bridge from the closest thing they have used instead (the target file's bridging answer, if there is one). Use only what the code shows or the user said; never invent how they used it.
+- **Your angle:** a bridge to the user's own code, with a file reference (e.g. "In Taskly, `get_db` in `app/deps.py:9` is a generator dependency, so…"). If all they have is a job or project known only from the CV, bridge from its CV line with a gap (e.g. "At Brightline Media you maintained Django services: [which one, and what you changed]"). Otherwise, if they have no evidence for this, write "No evidence in your code: answer from first principles and say so." For a `gap` skill, bridge from the closest thing they have used instead (the target file's bridging answer, if there is one). Use only what the code shows or the user said; never invent how they used it.
 
 ### Hands-on
 The commands, snippets or config the user should be able to explain line by line, ideally taken **from their own code** (with any secret in it written as `[redacted]`). For CLI tools like ffmpeg, break the actual command their code builds down flag by flag.

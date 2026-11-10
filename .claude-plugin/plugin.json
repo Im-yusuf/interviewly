@@ -1,7 +1,8 @@
 {
   "name": "interviewly",
+  "displayName": "Interviewly",
   "description": "Mock interviews about your own code. Interviewly reads your CV and your projects, asks the follow-ups real interviewers ask, checks every CV claim, and turns code you vibe coded into 10-minute lessons. You built it. Now explain it.",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "author": {
     "name": "Im-yusuf",
     "url": "https://github.com/Im-yusuf"
@@ -20,5 +21,9 @@
     "vibe-coding"
   ],
   "homepage": "https://github.com/Im-yusuf/interviewly",
-  "repository": "https://github.com/Im-yusuf/interviewly"
+  "repository": "https://github.com/Im-yusuf/interviewly",
+  "icon": "./.claude-plugin/icon.png",
+  "documentationUrl": "https://github.com/Im-yusuf/interviewly/blob/main/docs/how-it-works.md",
+  "supportUrl": "https://github.com/Im-yusuf/interviewly/issues",
+  "privacyPolicyUrl": "https://github.com/Im-yusuf/interviewly/blob/main/PRIVACY.md"
 }

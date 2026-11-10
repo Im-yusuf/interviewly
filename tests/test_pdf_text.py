@@ -335,5 +335,39 @@ class PdfTextTest(unittest.TestCase):
         self.assertEqual((code, err.strip()), (1, "This PDF is too complex to read safely: a stream unpacks to more than 32 MB."))
 
 
+class ReviewFixesTest(unittest.TestCase):
+    """Bugs a review of the reader found, each with the input that showed it."""
+
+    def read(self, data):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        path = Path(tmp) / "cv.pdf"
+        path.write_bytes(data)
+        return pdf_text.Document(path)
+
+    def test_a_line_that_starts_with_a_space_is_read(self):
+        """Word and browsers draw an empty paragraph as one space, and an indent as leading spaces."""
+        doc = self.read(pdf_fixture.runs_pdf([(72, 760, 12, "Jordan Vale"), (72, 740, 12, " "), (72, 720, 12, "  Leeds, UK")]))
+        md = doc.markdown()
+        self.assertIn("Jordan Vale", md)
+        self.assertIn("Leeds, UK", md)
+
+    def test_an_italic_face_with_a_heavy_stem_is_not_bold(self):
+        """Chrome gives Arial-ItalicMT a StemV of 130, above Arial-BoldMT's."""
+        italic = b"<< /Type /Font /Subtype /TrueType /BaseFont /Arial-ItalicMT /Encoding /WinAnsiEncoding /FontDescriptor 7 0 R >>"
+        descriptor = b"<< /Type /FontDescriptor /FontName /Arial-ItalicMT /Flags 96 /ItalicAngle -12 /StemV 130 >>"
+        doc = self.read(pdf_fixture.page(b"BT /F2 12 Tf 72 700 Td (Acme Robotics) Tj ET",
+                                         b"/Font << /F1 5 0 R /F2 6 0 R >>", [italic, descriptor]))
+        self.assertIn("*Acme Robotics*", doc.markdown())
+        self.assertNotIn("**", doc.markdown())
+
+    def test_bold_runs_end_where_the_weight_changes(self):
+        bold = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"
+        doc = self.read(pdf_fixture.page(
+            b"BT /F2 12 Tf 72 700 Td (FastAPI) Tj /F1 12 Tf (-based tools in ) Tj /F2 12 Tf (Python) Tj /F1 12 Tf (/) Tj "
+            b"/F2 12 Tf (Go) Tj ET", b"/Font << /F1 5 0 R /F2 6 0 R >>", [bold]))
+        self.assertEqual(doc.lines[0].bold_runs(), ["FastAPI", "Python", "Go"])
+
+
 if __name__ == "__main__":
     unittest.main()

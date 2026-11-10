@@ -70,11 +70,12 @@ PAPER = {"a4": ("A4", 595.28, 841.89), "letter": ("letter", 612.0, 792.0)}   # C
 
 DATE = re.compile(r"((19|20)\d\d|\b(present|current|now)\b)", re.I)
 RULE = re.compile(r"\s*(-{3,}|\*{3,}|_{3,})\s*")
-WHOLE_BOLD = re.compile(r"(\[[^\]]+\]\([^)\s]+\))?\*\*(?:(?!\*\*).)+\*\*[.:]?")
-WHOLE_ITALIC = re.compile(r"(\*|_)(?!\*)[^*_].*(?<!\*)\1")
+URL = r"(?:[^()\s]|\([^()\s]*\))+"   # may hold one level of brackets, as in wiki/Foo_(bar)
+WHOLE_BOLD = re.compile(r"(\[[^\]]+\]\(" + URL + r"\))?\*\*(?:(?!\*\*).)+\*\*[.:]?")
+WHOLE_ITALIC = re.compile(r"\*[^*]+\*|_[^_]+_")   # one italic span and nothing else
 INLINE = re.compile(
     r"`(?P<code>[^`]+)`"
-    r"|\[(?P<label>[^\]]+)\]\((?P<url>[^)\s]+)\)"
+    r"|\[(?P<label>[^\]]+)\]\((?P<url>" + URL + r")\)"
     r"|\*\*(?P<bold>.+?)\*\*"
     r"|(?<![\w*])\*(?P<it1>[^*\s](?:[^*]*[^*\s])?)\*(?![\w*])"
     r"|(?<![\w_])_(?P<it2>[^_\s](?:[^_]*[^_\s])?)_(?![\w_])"

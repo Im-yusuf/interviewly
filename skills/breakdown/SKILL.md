@@ -23,7 +23,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 1. Write the guide
 
-Write `HOME_DIR/guides/<slug>-breakdown.md` (or `<slug>-<component>-breakdown.md` when zoomed in) with the sections below. It's for revising the night before, so keep it tight: about 1,500 words for a project known only from the CV, about 2,000 for a small codebase, and no more than about 4,000 for a large one. Post a one-line progress note before you start writing it. Choose the components that matter rather than covering every file.
+Write `HOME_DIR/guides/<slug>-breakdown.md` (or `<slug>-<component>-breakdown.md` when zoomed in) with the sections below. If the file is already there, read it first and keep what the user wrote into its gaps. It's for revising the night before, so keep it tight: about 1,500 words for a project known only from the CV, about 2,000 for a small codebase, and no more than about 4,000 for a large one. Post a one-line progress note before you start writing it. Choose the components that matter rather than covering every file.
 
 **Only the code, the CV and the user's words.** The user will memorise this guide, so every pitch, answer and reason in it must be true. Where one needs a fact you don't have (a result, a number, why something was done, who did what), leave a gap that names it, like `[the result]` or `[why you chose this]`, never a value. Never quote a secret from the code: write `[redacted]`.
 

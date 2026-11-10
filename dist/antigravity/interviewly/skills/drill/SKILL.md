@@ -36,7 +36,7 @@ For each item:
    - End your turn and wait.
 2. Score it straight away, from 1 to 4, against `answer_hint` and the user's code (open the referenced file if the hint isn't enough). Reply in no more than three lines:
    - `✅ 4/4` / `🟡 3/4` / `🟠 2/4` / `❌ 1/4`, with a one-line reason
-   - **Answer:** the crisp correct answer in one or two sentences, with a file reference if relevant
+   - **Answer:** the crisp correct answer in one or two sentences, with a file reference if relevant. If only the user knows it (what happened at a job with no code, a behavioral story), say what a strong answer names instead, with a gap such as `[the bottleneck you found]` for any fact you weren't given, never a guess
 3. If they scored 2, ask one quick follow-up on the same point before moving on (the follow-up doesn't change the score). On a **new** topic they couldn't answer, the **Answer** line is the lesson: make it the one idea to remember, in plain words. It comes back tomorrow either way.
 4. Append the item to the drill session file with your file edit tool, with a `**Score:** n/4` line. Then run `iv score "<topic id>" <n> --source "sessions/<drill file name>"`. It prints the next due date. An id with anything but lowercase letters, digits, `.`, `_`, `-` and `/` (an old topic) goes as JSON through `iv score --stdin` instead (safety rule 3).
 

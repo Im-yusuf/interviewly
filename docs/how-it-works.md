@@ -1,6 +1,6 @@
 # How Interviewly works
 
-The [README](../README.md) covers what Interviewly does for you. This page covers how: what it reads, how it scores, what it stores and where data goes. For the code itself, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+The [README](../README.md) covers what Interviewly does for you. This page covers how: what it reads, how it scores, what it stores and where data goes. For each command's arguments, see [commands](commands.md); when something goes wrong, [troubleshooting](troubleshooting.md); for the code itself, [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 - [The big picture](#the-big-picture)
 - [Reading your CV and code](#reading-your-cv-and-code)
@@ -162,7 +162,7 @@ With `$INTERVIEWLY_HOME`, run `rm -rf "$INTERVIEWLY_HOME"` and `find "$(dirname 
 
 Your AI app keeps its own conversation history, which holds what you pasted and what was read during sessions. Clear it in the app: Claude Code keeps it in `~/.claude/projects` (and copies of edited files in `~/.claude/file-history`), Codex in `~/.codex/sessions`, and Antigravity in its conversation list.
 
-See [SECURITY.md](../SECURITY.md) to report a vulnerability.
+[PRIVACY.md](../PRIVACY.md) has the short version of all this. See [SECURITY.md](../SECURITY.md) to report a vulnerability.
 
 ## Claude Code, Codex and Antigravity
 

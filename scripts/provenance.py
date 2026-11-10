@@ -57,13 +57,14 @@ GENERATED_SUFFIXES = (".lock", ".min.js", ".min.css", ".js.map", ".css.map", ".s
 GENERATED_DIRS = {"node_modules", "vendor", "third_party", "dist", "build", ".yarn"}
 BULK_LINES = 1500
 MAX_COMMITS = 20000
+AUTHORS_LISTED = 50   # authors named when no identity is given: the user may be a small contributor to a team repo
 MAX_LEFT_OUT = 200  # partial clones: most files whose contents weren't downloaded that can be left out by name
 TIME_LIMIT = 90  # seconds for all git calls together, under the Bash tool's 120 s default
 # Repo config can name programs that read-only commands run (core.fsmonitor on any index read, gpg.program via
 # log.showSignature, an upload-pack, ssh or remote helper on a lazy fetch). Turn them off; run() also blocks every
 # transport, because this script never needs the network.
 SAFE = ("--no-pager", "-c", "core.fsmonitor=", "-c", "core.quotepath=off", "-c", "log.showSignature=false",
-        "-c", "protocol.allow=never", "-c", "color.ui=false")
+        "-c", "protocol.allow=never", "-c", "color.ui=false", "-c", "log.showRoot=true")   # showRoot: count the first commit
 LOG = ("log", "-z", "--no-merges", "--no-ext-diff", "--no-textconv", "--encoding=UTF-8")
 NOTE = "Signals, not proof: squash merges, missing trailers and pasted code hide how code was written."
 
@@ -459,10 +460,11 @@ def analyse(repo, me=(), subdir=None, top=25, max_commits=MAX_COMMITS):
     total = sum(totals.values())
     report.update({
         "lines_added": total if count_lines else None,
-        "share": {k: (round(100 * v / total) if total else 0) if count_lines else None for k, v in totals.items()},
+        "share": {k: (round(100 * v / total) if total else 0) if count_lines and me else None for k, v in totals.items()},
         "ignored_lines": sum(skipped.values()),
         "ignored_files": [p for p, _ in sorted(skipped.items(), key=lambda kv: -kv[1])[:5]],
-        "authors": sorted(authors.values(), key=lambda a: (-a["added"], -a["commits"]))[:10],
+        "authors": sorted(authors.values(), key=lambda a: (-a["added"], -a["commits"]))[:AUTHORS_LISTED],
+        "authors_total": len(authors),
         "bulk_commits": sorted(bulk, key=lambda b: -b["added"])[:5],
         "files": sorted(files.values(), key=lambda f: -f["added"])[:top],
     })
@@ -477,9 +479,12 @@ def summary(r):
     if r["identities"] and r["lines_added"]:
         lines.append(f"lines added: you {s['mine']}%, you with AI {s['mine_ai']}%, others {s['others']}%, bots {s['bots']}%")
     elif not r["identities"] and r["authors"]:
-        lines.append("authors (say which are you, then run again with --me):")
+        lines.append("authors (say which are you, then run again with --me-file):")
         lines += [f"  {a['name']} <{a['email']}>: {a['commits']} commits" + (f", +{a['added']} lines" if counted else "")
                   for a in r["authors"]]
+        more = r.get("authors_total", 0) - len(r["authors"])
+        if more > 0:
+            lines.append(f"  and {more} more with fewer lines")
     if r["ignored_lines"]:
         lines.append(f"left out: {r['ignored_lines']} lines in lockfiles and generated or vendored files "
                      f"({', '.join(r['ignored_files'])})")
@@ -489,9 +494,12 @@ def summary(r):
         lines.append("AI share: unknown (no AI trailers or tool files; autocomplete and pasted code leave none)")
     for b in r["bulk_commits"]:
         lines.append(f"large commit {b['commit']} ({b['date']}, +{b['added']}): {b['subject']}")
-    if r["files"]:
+    if r["files"] and r["identities"]:
         lines.append("biggest files (added lines: you / you with AI / others):")
         lines += [f"  {f['path']}: {f['mine']} / {f['mine_ai']} / {f['others']}" for f in r["files"][:12]]
+    elif r["files"]:   # nobody is "you" yet
+        lines.append("biggest files (added lines: without AI credit / with AI credit):")
+        lines += [f"  {f['path']}: {f['mine']} / {f['mine_ai']}" for f in r["files"][:12]]
     lines.append(r["note"])
     return "\n".join(lines)
 

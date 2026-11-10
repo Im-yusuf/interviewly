@@ -35,6 +35,7 @@ import sys
 import unicodedata
 from collections import Counter
 from pathlib import Path
+from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pdf_text  # noqa: E402
@@ -145,7 +146,7 @@ DATE_STYLES = {
 PRESENT = re.compile(r"\b(present|current|now|today|heute|aktuell|derzeit|actuel(?:le)?|actuellement|aujourd'hui|"
                      r"présent|en cours|actualidad|actualmente|presente|atual|attuale|oggi|heden|huidig|günümüz|"
                      r"halen|devam ediyor)\b", re.I)
-EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b")
 PHONE = re.compile(r"(\+?\d[\d\s().-]{7,}\d)")
 YEARS_ONLY = re.compile(r"[\s(]*(?:(?:\d{1,2}[./])?(?:19|20)\d\d[\s().-]*)+")   # "2019 - 2024", "01.2020 - 06.2024"
 PROFILE = re.compile(r"(?:linkedin\.com/in/|github\.com/|gitlab\.com/|bitbucket\.org/|behance\.net/|dribbble\.com/"
@@ -171,6 +172,11 @@ BAD_CHARS = {
     "a control character": re.compile(r"[\x00-\x08\x0b-\x1f\x7f]"),
     "an invisible character": INVISIBLE,
 }
+# Hebrew, Arabic and Indic scripts, and Chinese and Japanese. A browser writes these into a PDF as presentation
+# forms, look-alike radicals or in visual order, so a parser that ignores ActualText reads them differently and
+# this checker can't compare them with the source. No edit to the Markdown changes that: it is a warning.
+HARD_SCRIPTS = re.compile("[\u0590-\u08ff\u0900-\u0dff\u2e80-\u2fdf\u3000-\u9fff\uf900-\ufaff\ufb1d-\ufdff\ufe70-\ufeff]")
+BY_EYE = " (how a browser writes this script into a PDF: nothing in the Markdown changes it, so check those words by eye)"
 BULLET = re.compile(r"^[•●▪■◦‣∙·*\-–]\s+")
 VARIANTS = {
     "postgresql": ["postgres", "postgresql"], "javascript": ["javascript", "js"],
@@ -193,7 +199,8 @@ CASED = {
 }
 WORDS_PER_PAGE = 650
 SHORT_CV = 100
-LINK = re.compile(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)")   # not an image: ![photo](me.jpg)
+URL = r"(?:[^()\s]|\([^()\s]*\))+"   # may hold one level of brackets, as in wiki/Foo_(bar)
+LINK = re.compile(r"(?<!!)\[([^\]]+)\]\((" + URL + r")\)")   # not an image: ![photo](me.jpg)
 LOCAL_HOST = re.compile(r"localhost|.+\.(?:localhost|local|internal|lan|home\.arpa)", re.I)
 
 
@@ -201,9 +208,15 @@ class Unreadable(Exception):
     """A PDF that can't be parsed: a damaged or crafted file."""
 
 
+def plain(text):
+    """Text without what the PDF writer drops or redraws (pdf_render.tidy): format characters such as soft hyphens,
+    zero-width characters and direction marks go, and a non-breaking hyphen is a hyphen."""
+    return "".join(c for c in text.replace("\u2011", "-") if unicodedata.category(c) != "Cf")
+
+
 def norm(text):
     """Lower case, letters (any script), digits and + # / . kept, invisible characters dropped, everything else a space."""
-    text = unicodedata.normalize("NFC", INVISIBLE.sub("", text).replace("İ", "i")).lower()
+    text = unicodedata.normalize("NFC", plain(text).replace("İ", "i")).lower()
     return "".join(c if c in "+#/. " or unicodedata.category(c)[0] in "LNM" else " " for c in text)
 
 
@@ -211,7 +224,7 @@ def fold(text):
     """Text for comparing what a parser reads with the source: NFC, lower case (Turkish İ as i), no invisible
     characters, any run of spaces (no-break ones too) as one space. ß and ı stay as they are, so a name printed
     as GROSS or IŞIK still differs from Groß or Işık."""
-    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", INVISIBLE.sub("", text).replace("İ", "i")).lower()).strip()
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", plain(text).replace("İ", "i")).lower()).strip()
 
 
 def tokens(text):
@@ -298,15 +311,15 @@ def strip_md(text):
 def md_links(md):
     """Every link the PDF should carry: [label](url), bare emails and profile addresses."""
     out = [(strip_md(label), url) for label, url in LINK.findall(md)]
-    bare = LINK.sub(" ", md)
+    bare = re.sub(r"`[^`]*`", " ", LINK.sub(" ", md))   # cv_to_pdf doesn't link what's inside a code span
     out += [(e, "mailto:" + e) for e in EMAIL.findall(bare)]
-    out += [(p, "https://" + p) for p in re.findall(r"(?<![\w/@.])(?:www\.)?(?:linkedin\.com|github\.com|gitlab\.com)/[^\s|,;()]*[^\s|,;().]", bare)]
-    out += [(u, u) for u in re.findall(r"\bhttps?://[^\s<>()|]*[^\s<>()|.,;:]", bare)]
+    out += [(p, "https://" + p) for p in re.findall(r"(?<![\w/@.])(?:www\.)?(?:linkedin\.com|github\.com|gitlab\.com)/[^\s|,;()]*[^\s|,;().*`]", bare)]
+    out += [(u, u) for u in re.findall(r"\bhttps?://[^\s<>()|]*[^\s<>()|.,;:*`]", bare)]
     return out
 
 
 def url_key(url):
-    url = url.strip().lower()
+    url = unquote(url.strip()).lower()   # a PDF may carry zo%C3%AB where the source says zoë
     url = re.sub(r"^(https?://)?(www\.)?", "", url)
     return url.rstrip("/")
 
@@ -315,16 +328,32 @@ def original_links(path):
     """[(label, url)] of every link in the user's original CV file (PDF, Word, ODT, RTF or Markdown)."""
     path = Path(path)
     if path.suffix.lower() == ".pdf":
-        return [(l["text"], l["uri"]) for l in pdf_text.Document(path).links]
+        return joined_links((l["text"], l["uri"]) for l in pdf_text.Document(path).links)
     import cv_to_text
     converters = {".docx": cv_to_text.docx_to_text, ".odt": cv_to_text.odt_to_text, ".rtf": cv_to_text.rtf_to_text}
     text = (converters[path.suffix.lower()](path) if path.suffix.lower() in converters
             else path.read_text(encoding="utf-8-sig", errors="replace"))
     body, _, listed = text.partition("\n\nLinks in the file:\n")
-    found = md_links(body)
-    if not found and listed:
-        found = [tuple(x.strip() for x in line[2:].rsplit(": ", 1)) for line in listed.splitlines() if ": " in line]
+    found = joined_links(md_links(body))
+    have = {url_key(url) for _, url in found}
+    for line in listed.splitlines():   # "- label: url": links the body's text doesn't show
+        label, sep, url = line[2:].rpartition(": ")
+        if sep and url_key(url) not in have:
+            found.append((label.strip(), url.strip()))
+            have.add(url_key(url))
     return found
+
+
+def joined_links(links):
+    """[(label, url)] with neighbouring pieces of one link (it wrapped onto a second line, or part of it is bold)
+    counted as one link."""
+    out = []
+    for label, url in links:
+        if out and url_key(out[-1][1]) == url_key(url):
+            out[-1] = (f"{out[-1][0]} {label}".strip(), out[-1][1])
+        else:
+            out.append((label, url))
+    return out
 
 
 def links_kept(original, source):
@@ -569,19 +598,23 @@ def pdf_checks(doc, add, source=None, max_pages=2, extra_parsers=True):
     issues, fail = [], False
     lines_text, lines_raw = text.splitlines(), raw.splitlines()
     if raw != text:
-        fail = True
         if len(lines_text) == len(lines_raw):
             diffs = [(r, t) for r, t in zip(lines_raw, lines_text) if r != t]
-            issues.append(f"{len(diffs)} line(s) read differently in parsers that ignore ActualText, e.g. {diffs[0][0][:50]!r}")
+            by_eye = all(HARD_SCRIPTS.search(r + t) for r, t in diffs)
+            fail = fail or not by_eye
+            issues.append(f"{len(diffs)} line(s) read differently in parsers that ignore ActualText, e.g. {diffs[0][0][:50]!r}"
+                          + (BY_EYE if by_eye else ""))
         else:
+            fail = True
             extra = len(lines_raw) - len(lines_text)
             issues.append(f"spaces in some fonts map to line breaks, so many parsers see {extra} extra line breaks "
                           f"(e.g. a name or phrase split in two)")
     for what, pattern in BAD_CHARS.items():
         hits = [l for l in lines_raw if pattern.search(l)]
         if hits:
-            fail = True
-            issues.append(f"{what} on {len(hits)} line(s), e.g. {hits[0][:50]!r}")
+            by_eye = all(HARD_SCRIPTS.search(l) for l in hits)
+            fail = fail or not by_eye
+            issues.append(f"{what} on {len(hits)} line(s), e.g. {hits[0][:50]!r}" + (BY_EYE if by_eye else ""))
     splits = [(a, b) for a, b in zip(doc.lines, doc.lines[1:])
               if a.page == b.page and re.search(r"[A-Za-z]-$", a.text) and re.match(r"[a-z]", b.text)]
     if splits:
@@ -688,7 +721,10 @@ def pdf_checks(doc, add, source=None, max_pages=2, extra_parsers=True):
         if moved:
             add("fail", "fidelity", f"{len(moved)} passage(s) come out in a different order than in the source, e.g. "
                 f"{moved[0][:60]!r}: a parser reads them out of place (often a date beside a heading that wraps)")
+        elif missing and all(HARD_SCRIPTS.search(m) for m in missing):
+            add("warn", "fidelity", f"{len(missing)} passage(s) couldn't be compared with the source, e.g. {missing[0][:60]!r}" + BY_EYE)
         elif missing:
+            missing.sort(key=lambda m: bool(HARD_SCRIPTS.search(m)))   # lead with one the user can fix
             split_link = re.search(r"https?://|www\.|\w\.\w+/", missing[0])
             add("fail", "fidelity", f"{len(missing)} passage(s) of the source missing or changed in the PDF, e.g. {missing[0][:60]!r}"
                 + (f" (PDF has {extra[0][:40]!r})" if extra else "")
@@ -700,7 +736,7 @@ def pdf_checks(doc, add, source=None, max_pages=2, extra_parsers=True):
 
         bold_src = [strip_md(b) for line in source.splitlines() if not line.startswith("#")
                     for b in re.findall(r"\*\*(.+?)\*\*", line)]
-        bold_pdf = Counter(w for line in doc.lines for w in tokens(" ".join(x for x, b in line.words() if b)))
+        bold_pdf = Counter(w for line in doc.lines for w in tokens(" ".join(line.bold_runs())))
         lost = []
         for phrase in bold_src:
             ws = tokens(phrase)
@@ -747,7 +783,9 @@ def analyse(path, keywords=None, source=None, max_pages=2, original=None, extra_
                     "results": results}
         s = structure_from_markdown(src_md) if src_md else structure_from_pdf(doc)
         first = doc.lines[0].text.strip() if doc.lines else ""
-        if src_md and fold(first) != fold(s["name"]):
+        if src_md and fold(first) != fold(s["name"]) and HARD_SCRIPTS.search(first + s["name"]):
+            add("warn", "reading order", f"the PDF's first line reads {first[:40]!r}, which couldn't be compared with your name" + BY_EYE)
+        elif src_md and fold(first) != fold(s["name"]):
             add("fail", "reading order", f"the PDF's first line reads {first[:40]!r}, but an ATS takes the first line as your name")
         elif not src_md and s["name"] and fold(first) != fold(s["name"]):
             add("warn", "reading order", f"the PDF's first line reads {first[:40]!r}, not your name, and an ATS takes the "

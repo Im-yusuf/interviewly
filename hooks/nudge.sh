@@ -4,6 +4,10 @@
 # A systemMessage is shown to the user only, so Claude never sees it. Turn off: /interviewly:setup reminder off
 # Nothing set up yet: stay silent without even starting Python.
 [ -f "${INTERVIEWLY_HOME:-$HOME/.interviewly}/profile.json" ] || exit 0
-command -v python3 >/dev/null 2>&1 || exit 0
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" nudge 2>/dev/null
+# Python is `python3` on macOS and Linux, and often `python` or `py -3` on Windows, where `python3` can be a
+# stub that only opens the Store. Use the first one that runs the reminder.
+for py in python3 python "py -3"; do
+  command -v "${py%% *}" >/dev/null 2>&1 || continue
+  $py "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" nudge 2>/dev/null && exit 0
+done
 exit 0
