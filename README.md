@@ -62,7 +62,7 @@ You shipped it with Claude, Cursor or Copilot. It works, it's on your CV, and yo
 `/interviewly:larp-it` turns your project into 10-minute lessons, riskiest code first. Read a little. Explain it back in your own words. Predict what breaks. Answer the question the interviewer will ask. Lesson by lesson, it becomes your code.
 
 <p align="center">
-  <img src="docs/larp-it.png" width="100%" alt="Rendered from real output on the sample project: /interviewly:larp-it fastapi-todo saves an 8-lesson plan for the Taskly API, with the async def handlers and the BackgroundTasks reminders marked as high explain-risk. Lesson 1 points at app/routers/todos.py:27-40 and app/deps.py:10-25, says what to look for, and asks the user to explain the code in two or three sentences.">
+  <img src="docs/larp-it.png" width="100%" alt="Rendered from real output on the sample project: /interviewly:larp-it fastapi-todo saves an 8-lesson plan for the Taskly API, riskiest code first: after the opening lesson come the BackgroundTasks reminders and the async def routes, both marked as high explain-risk. Lesson 1 points at app/routers/todos.py:27-40 and app/deps.py:10-25, says what to look for, and asks the user to explain the code in two or three sentences.">
 </p>
 
 - **Find the parts you can't explain yet.** It reads your git history (AI co-author tags, files like `CLAUDE.md` or `.cursorrules`) and flags the code you'd struggle to explain. You confirm what's yours.

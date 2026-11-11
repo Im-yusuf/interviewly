@@ -115,16 +115,16 @@
     <div class="body">
       <div class="plan">
         <div class="prompt"><span class="caret">›</span><span class="cmd">/interviewly:larp-it fastapi-todo</span></div>
-        <p class="lead">Your <b>Taskly API</b> plan is saved: <b>8 lessons, about 10 minutes each</b>, riskiest parts in the middle.</p>
+        <p class="lead">Your <b>Taskly API</b> plan is saved: <b>8 lessons, about 10 minutes each</b>, riskiest code first.</p>
         <ol>
           <li class="now"><span class="n">1</span><span>How a POST /todos becomes a database row</span><span class="tag now">Now</span></li>
-          <li><span class="n">2</span><span>The data model: the <code>Todo</code> table and the three schemas</span><span></span></li>
-          <li><span class="n">3</span><span>API keys and per-user isolation</span><span></span></li>
-          <li><span class="n">4</span><span><code>async def</code> handlers with a sync Session</span><span class="tag risk">High explain-risk</span></li>
-          <li><span class="n">5</span><span>Reminder emails with BackgroundTasks</span><span class="tag risk">High explain-risk</span></li>
-          <li><span class="n">6</span><span>Edge cases: PATCH with <code>null</code>, negative <code>limit</code></span><span></span></li>
-          <li><span class="n">7</span><span>Tests: <code>dependency_overrides</code>, <code>StaticPool</code></span><span></span></li>
-          <li><span class="n">8</span><span>Running it: Docker, config, and whether it runs on Postgres</span><span></span></li>
+          <li><span class="n">2</span><span>When the reminder actually runs (BackgroundTasks)</span><span class="tag risk">High explain-risk</span></li>
+          <li><span class="n">3</span><span><code>async def</code> routes on a sync SQLAlchemy session</span><span class="tag risk">High explain-risk</span></li>
+          <li><span class="n">4</span><span>How each API key only sees its own todos</span><span></span></li>
+          <li><span class="n">5</span><span>The <code>Todo</code> table and its Pydantic schemas</span><span></span></li>
+          <li><span class="n">6</span><span>Edge cases: PATCH with <code>null</code>, negative limits</span><span></span></li>
+          <li><span class="n">7</span><span>How the tests get a clean database</span><span></span></li>
+          <li><span class="n">8</span><span>How it's configured and run in Docker</span><span></span></li>
         </ol>
       </div>
 
@@ -144,7 +144,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="#e3b341" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <div>
             <h4>What to look for</h4>
-            <p>The handler's four parameters, and where each one gets its value.</p>
+            <p>The parameters <code>create_todo</code> takes, and which of them something in <code>deps.py</code> fills in.</p>
           </div>
         </div>
 
