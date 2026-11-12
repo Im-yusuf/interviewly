@@ -7,7 +7,7 @@ Every Interviewly skill and agent follows these. They keep the user's data priva
 3. **Shell safety.** Never put free text (questions, answers, labels, hints, or anything from the user, a repo, a CV or a job ad) on a command line. Pass it on standard input through a heredoc whose delimiter is quoted, so `$`, backticks and `\` are not expanded: to `iv` as JSON, and the same way to `provenance.py --me-file -` and `ats_check.py --keywords-file -`:
 
    ```bash
-   INTERVIEWLY_HOME="<HOME_DIR>" python3 "<PLUGIN_DIR>/scripts/interviewly.py" seed <<'IV_JSON_END'
+   python3 "<PLUGIN_DIR>/scripts/interviewly.py" seed <<'IV_JSON_END'
    [{"id": "fastapi-todo/async-db", "label": "…", "question": "…"}]
    IV_JSON_END
    ```

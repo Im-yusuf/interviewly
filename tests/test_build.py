@@ -239,6 +239,41 @@ class ReferencesTest(unittest.TestCase):
                 if code.startswith("sed ") or (self.SHELL_READ.search(code) and self.PLUGIN_PATH.search(code)):
                     self.fail(f"{self.name(source)}: read the file whole with the file tool instead of `{code}`")
 
+    # What Claude Code may do without asking while a skill runs: read the plugin's own files, and run the state
+    # helper typed exactly as common.md shows. Nothing that reads or runs the user's code belongs here.
+    ALLOWED_TOOLS = ('allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), '
+                     'Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)')
+
+    def test_skills_pre_approve_only_plugin_reads_and_the_helper(self):
+        for skill in self.SKILLS:
+            head = self.text(skill).split("\n---\n")[0]
+            lines = [line for line in head.splitlines() if line.startswith("allowed-tools")]
+            self.assertEqual(lines, [self.ALLOWED_TOOLS], self.name(skill))
+        for agent in self.AGENTS:
+            self.assertNotIn("allowed-tools", self.text(agent), self.name(agent))
+
+    def test_the_helper_is_called_in_the_form_that_is_pre_approved(self):
+        common = self.text(ROOT / "references" / "common.md")
+        call = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py"'
+        self.assertIn(f"```bash\n{call} home\n```", common)
+        self.assertIn(f"```bash\n{call} <command>\n```", common)
+        for skill in self.SKILLS:
+            text = self.text(skill)
+            self.assertIn(f"`{call} home`", text, self.name(skill))
+            # a variable set in front of the command, or the script path unquoted, is a form Claude Code asks about
+            self.assertNotIn("INTERVIEWLY_HOME", text, self.name(skill))
+            self.assertNotIn("python3 ${CLAUDE_PLUGIN_ROOT}", text, self.name(skill))
+
+    def test_no_command_claude_code_cannot_check(self):
+        # `${VAR:-default}` and `awk` programs can't be checked before they run, so each one stops to ask the user
+        for source in self.SKILLS + self.AGENTS + self.REFERENCES:
+            for code in self.CODE.findall(self.text(source)):
+                code = code.strip("`")
+                self.assertIsNone(re.search(r"\$\{[^}]*:-", code),
+                                  f"{self.name(source)}: get the home folder from `iv home`, not `{code}`")
+                self.assertIsNone(re.search(r"(?:^|[;|&(]\s*|\n\s*)awk\s", code),
+                                  f"{self.name(source)}: use `iv dossier`, not `{code}`")
+
     def test_named_reference_files_exist(self):
         names = {p.name for p in self.REFERENCES}
         for source in self.SKILLS + self.AGENTS + self.REFERENCES:

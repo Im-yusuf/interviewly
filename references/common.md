@@ -27,25 +27,29 @@ Interviewly runs in Claude Code, Codex and Antigravity. The skills are written o
 ## Home folder
 
 ```bash
-echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home
 ```
 
-Run this once at the start of each skill and use the result as `HOME_DIR` (an absolute path) from then on. If it isn't absolute, stop and ask the user to set `INTERVIEWLY_HOME` to an absolute path, so their CV never lands in a project folder.
+Run this (`iv home`, see below) once at the start of each skill and use the path it prints as `HOME_DIR` from then on. It's `$INTERVIEWLY_HOME` when the user has set that and `~/.interviewly` when they haven't. If it prints an error instead (the variable must be an absolute path, so their CV never lands in a project folder), stop and tell the user what it said.
 
-It holds the user's CV and private code, so only they may read it: create it with `mkdir -p -m 700 "<HOME_DIR>"` before the first write (`iv` keeps it at 0700). Create subfolders with `mkdir -p` as needed. Write user data only under `HOME_DIR`, and never modify the user's project repositories. (Clones in `HOME_DIR/repos/` are Interviewly's own copies: the breakdown skill updates them with `git -C "<path>" pull --ff-only -q`.)
+It holds the user's CV and private code, so only they may read it: create it with `mkdir -p -m 700 "<HOME_DIR>"` before the first write (`iv` keeps it at 0700). A missing subfolder needs no `mkdir`: your file-writing tool makes it along with the file (only if yours doesn't, `mkdir -p`). Write user data only under `HOME_DIR`, and never modify the user's project repositories. (Clones in `HOME_DIR/repos/` are Interviewly's own copies: the breakdown skill updates them with `git -C "<path>" pull --ff-only -q`.)
 
 ## The helper script (`iv`)
 
-Skills and agents never edit `topics.json` by hand, and never work out dates themselves (`iv stamp` names new session files). They call the helper, always passing `HOME_DIR` explicitly:
+Skills and agents never edit `topics.json` by hand, and never work out dates themselves (`iv stamp` names new session files). They call the helper:
 
 ```bash
-INTERVIEWLY_HOME="<HOME_DIR>" python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" <command>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" <command>
 ```
 
-The skills call this `iv` (for `${CLAUDE_PLUGIN_ROOT}`, see `PLUGIN_DIR` above).
+The skills call this `iv` (for `${CLAUDE_PLUGIN_ROOT}`, see `PLUGIN_DIR` above). It works on the folder `iv home` prints and nowhere else: a file you name on its command line must be in `HOME_DIR`.
+
+- **Type it just like that**, one `iv` command per shell call: `python3`, the script's path in double quotes, then the command. Not through a shell variable, not after `cd`, and not joined to another command with `;` or `&&`. In Claude Code each skill's `allowed-tools` line lets that exact form run, and files in the plugin folder be read, without the user being asked. Any other form asks them first.
+- **Told to use another home folder?** An agent is given one as `home:`, and a test can name one. Then start every `iv` call with `INTERVIEWLY_HOME="<that folder>" `, so the helper works on it too.
 
 | Command | What it does |
 |---|---|
+| `iv home` | The home folder, as an absolute path (see *Home folder*). |
 | `iv stamp [MODE]` | Today's local date and time for a new file name: `2026-11-09-1930-drill`. |
 | `iv seed [--file PATH]` | Add topics from a JSON list (or `{"topics": [...]}`) on stdin, or from PATH: `[{"id", "label", "skill", "project", "question", "answer_hint"}]`. They're **new** (untested): `iv due` introduces a few a day. Ids that already exist are skipped, so check them first (see `id` in `state-topics.md`). |
 | `iv score "<id>" <1-4> --source "<file>" [--skill S] [--project P]` | Record a score that comes with no text, and reschedule (creates the topic if it's new). Prints the new `next_due`. |
@@ -57,6 +61,7 @@ The skills call this `iv` (for `${CLAUDE_PLUGIN_ROOT}`, see `PLUGIN_DIR` above).
 | `iv check` | Validate every JSON file. Run it after writing JSON yourself. |
 | `iv count <session.md> [--q N]` | Words, spoken time at 140 words a minute, and the "I" and "we" counts of the main answer under the last `## Q` heading (or the Nth), as JSON. The walkthrough skill measures with it. |
 | `iv doctor` | A health check for bug reports (`/interviewly:setup doctor`): versions, yes/no answers and counts, never a name or a path. Lines start `ok`, `!` (needs fixing) or `-` (optional). |
+| `iv dossier <slug> [--top] "<Section>"…` | Only the named `## ` sections of `projects/<slug>.md`; `--top` adds its frontmatter (see `state-projects.md`). |
 | `iv audit-plan [--all]` · `iv audit-merge <part.json>…` | The CV audit's bookkeeping: which CV lines need (re)checking, and merging assessed lines into `audit.json` and `audit.md` (see the audit skill). |
 
 **Free text never goes on a command line**, where the shell would mangle or run it: pass it through a quoted heredoc (`<<'IV_JSON_END'`), as `safety.md` rule 3 shows. Besides `iv`, two scripts read it that way, `-` meaning standard input: `provenance.py --me-file -` (git identities: a JSON list, or one per line) and `ats_check.py --keywords-file -` (job keywords: one per line, or comma-separated). Skills don't use their older `--me` and `--keywords`.

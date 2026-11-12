@@ -2,6 +2,7 @@
 name: breakdown
 description: Project study guide. A written guide to one of the user's projects, from its code. Use for "explain my project" or "break down X".
 argument-hint: "<project> [component] [quick]"
+allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)
 ---
 
 # Project breakdown
@@ -12,7 +13,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-topics.md` (`topics.json` and topic ids). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-topics.md` (`topics.json` and topic ids). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. No `profile.json`? Run the `interviewly:start` skill instead, telling it which project the user wants broken down.
 3. **Quick mode** (the arguments include `quick`; the start skill sends this from a background task): ask the user nothing. Use the project named in the arguments, or the one that matters most for the active target. Write the guide as usual, then return the short summary described in section 2 instead of the in-chat walkthrough and the closing question.
 4. Work out the project from the arguments by matching `projects/index.json` slugs and names. If there's no match or no argument, ask with options, with up to 4 projects as options. If the argument is a technology rather than a project (e.g. "ffmpeg"), say that `/interviewly:prep <technology>` covers technologies, and offer to run it.

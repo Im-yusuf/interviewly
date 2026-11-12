@@ -2,6 +2,7 @@
 name: walkthrough
 description: Walkthrough and pitch practice. A timed, scored "walk me through your project" or "tell me about yourself", with a retry.
 argument-hint: "[project] [30s|2min|5min] | pitch [30s|90s]"
+allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)
 ---
 
 # Walkthrough practice
@@ -12,7 +13,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`), `${CLAUDE_PLUGIN_ROOT}/references/state-sessions.md` (settings and session files) and `${CLAUDE_PLUGIN_ROOT}/references/state-review.md` (the review JSON). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`), `${CLAUDE_PLUGIN_ROOT}/references/state-sessions.md` (settings and session files) and `${CLAUDE_PLUGIN_ROOT}/references/state-review.md` (the review JSON). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. No `profile.json`? Run the `interviewly:start` skill instead, telling it the user wants walkthrough practice (and these arguments).
 3. Read `projects/index.json` and, if `profile.active_target` is set, `targets/<active_target>.md`.
 4. The arguments start with `pitch`? Follow **Pitch** at the end instead of steps 1–3.
@@ -69,7 +70,7 @@ Ask with options: **Try it again now (Recommended)** · **Another project** · *
 
 The first question of almost every screen, and it frames the rest of the interview. The same steps as above, with these changes:
 
-1. **Read** `cv.md`, only the `## Summary` of each dossier (`awk '/^## /{p=/^## Summary$/} p' "<dossier>"`), and `stories.md` (an earlier `## Pitch`, if there is one). **Length:** `30s` ≈ 70 words, or `90s` (default) ≈ 210 words. Start the session file as in step 1, with `focus: pitch` and `persona: recruiter` (or `hiring-manager` if the target's next round is with one).
+1. **Read** `cv.md`, only the `## Summary` of each dossier (`iv dossier "<slug>" "Summary"`), and `stories.md` (an earlier `## Pitch`, if there is one). **Length:** `30s` ≈ 70 words, or `90s` (default) ≈ 210 words. Start the session file as in step 1, with `focus: pitch` and `persona: recruiter` (or `hiring-manager` if the target's next round is with one).
 2. **Ask** in character: "Tell me about yourself." Then the same out-of-character line as step 2. Log the answer as `## Q1 · topic: profile/tell-me-about-yourself · level: what` and measure it as in step 2, but check this **shape**: who they are now (role and focus) → one or two proof points, each with one real detail (a project, a result) → why this role now.
 3. **One follow-up,** aimed at the weakest part: "Why are you looking now?" if they left out the why; "Which of those should I ask you about?" if the proof points were thin.
 4. **Score and teach** as in step 4, with the rubric's **pitch** reading. Build the model pitch only from the CV, the dossiers and what the user said. "Why this company" comes only from the target file's sourced research. "Why this role" is the reason the user gave, or else the gap `[why you want this kind of role]`: never a motive they didn't state. Anything else is a bracketed gap. The review JSON thread has `n: 1`, `topic: profile/tell-me-about-yourself`, `label: "Tell me about yourself"`, `skill: null` and `project: null`. `iv apply` schedules it, so drills ask for the 30-second version.

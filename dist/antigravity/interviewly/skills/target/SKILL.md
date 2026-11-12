@@ -11,14 +11,14 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. Subcommands. `<slug>` is the name of a file in `targets/`. Given a company name, use the file it matches; given none with `date`, the active target; if nothing matches, show the list and ask.
    - `list`: show the targets in `HOME_DIR/targets/` (company, role, date) and mark the active one. Stop.
    - `use <slug>`: set `profile.active_target` to that slug. Stop.
    - `clear`: set `profile.active_target` to `null`. Stop.
    - `date <slug> <YYYY-MM-DD>`: set `interview_date` in that target's frontmatter, so practice is scheduled to finish before it and the daily reminder counts down to it. Stop.
 3. Otherwise, get the job description: read a file path, fetch a URL with your web tool (the job ad only), or use pasted text from the arguments or the conversation. If there's nothing to go on, the fetch fails or returns no job text, or you have no web tool, ask the user to paste it: LinkedIn, Workday and many other job sites need a login or JavaScript.
-4. Read `profile.json`, and from each dossier only what the map needs: `awk 'NR==1{p=1} /^## /{p=/^## (Summary|Stack|Weak spots|Probe points|CV claims vs code)$/} p' "<dossier>"`. No `profile.json`? Unless the arguments include `quick`, run the `interviewly:start` skill with the job ad instead (it sets the user up and analyses this job too) and stop. In quick mode, carry on: every requirement shows as "unknown".
+4. Read `profile.json`, and from each dossier only what the map needs: `iv dossier "<slug>" --top "Summary" "Stack" "Weak spots" "Probe points" "CV claims vs code"`. No `profile.json`? Unless the arguments include `quick`, run the `interviewly:start` skill with the job ad instead (it sets the user up and analyses this job too) and stop. In quick mode, carry on: every requirement shows as "unknown".
 
 ## 1. Analyse
 

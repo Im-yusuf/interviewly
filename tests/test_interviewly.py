@@ -915,6 +915,96 @@ Python, FastAPI, Redis
         self.assertIn("t/a", self.topics())
         self.assertTrue((self.home / "reports/2026-11-10-1200-deep-dive.html").exists())
 
+    def test_home_prints_the_folder_or_says_why_not(self):
+        self.assertEqual(self.run_cli("home").strip(), str(self.home))
+        self.assertEqual(list(self.home.iterdir()), [])              # it only prints: nothing is created
+        result = self.run_raw("home", env={"INTERVIEWLY_HOME": "relative-home"}, cwd=self.home)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("absolute", result.stderr)
+
+    def test_files_named_on_the_command_line_must_be_in_the_home_folder(self):
+        """Skills run iv without the user being asked each time, so it can't be aimed at their other files."""
+        elsewhere = tempfile.TemporaryDirectory()
+        self.addCleanup(elsewhere.cleanup)
+        review = json.dumps({"score": 3, "mode": "deep-dive", "threads": [{"n": 1, "topic": "t/a", "score": 3}]})
+        outside = Path(elsewhere.name) / "package.json"
+        outside.write_text(review, encoding="utf-8")
+        topic = Path(elsewhere.name) / "topics-to-add.json"
+        topic.write_text(json.dumps([{"id": "t/b", "score": 3, "source": "sessions/x.md"}]), encoding="utf-8")
+        self.write("cv.md", self.CV)
+        self.write("sessions/2026-11-10-1200-deep-dive.json", review)
+        dotted = str(self.home / "sessions" / ".." / ".." / Path(elsewhere.name).name / "package.json")
+        for args in (("apply", str(outside)), ("report", str(outside)), ("share", str(outside)),
+                     ("count", str(outside)), ("seed", "--file", str(topic)), ("score", "--file", str(topic)),
+                     ("audit-merge", str(outside)), ("apply", dotted)):
+            result = self.run_raw(*args)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertIn("isn't in the Interviewly folder", result.stderr, args)
+            self.assertNotIn("Traceback", result.stderr, args)
+        self.assertEqual(outside.read_text(encoding="utf-8"), review)   # apply didn't write `scheduled` into it
+        self.assertFalse((self.home / "topics.json").exists())
+        self.assertFalse((self.home / "reports").exists())
+        result = self.run_raw("apply", "package.json", cwd=elsewhere.name)   # a relative path in the current folder
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("isn't in the Interviewly folder", result.stderr)
+        self.run_cli("apply", str(self.home / "sessions/2026-11-10-1200-deep-dive.json"))
+        self.assertIn("t/a", self.topics())
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need extra rights on Windows")
+    def test_a_linked_subfolder_and_a_home_spelled_another_way_still_count_as_home(self):
+        review = json.dumps({"score": 3, "mode": "drill", "threads": []})
+        synced = tempfile.TemporaryDirectory()
+        self.addCleanup(synced.cleanup)
+        (Path(synced.name) / "2026-11-10-1200-drill.json").write_text(review, encoding="utf-8")
+        (self.home / "sessions").symlink_to(synced.name)             # sessions kept in a synced folder
+        self.run_cli("report", str(self.home / "sessions/2026-11-10-1200-drill.json"))
+        self.run_cli("report", "sessions/2026-11-10-1200-drill.json")
+        self.write("kept/2026-11-10-1300-drill.json", review)
+        alias = Path(synced.name) / "alias"
+        alias.symlink_to(self.home)                                  # as /tmp is /private/tmp on macOS
+        result = self.run_raw("report", str(self.home / "kept/2026-11-10-1300-drill.json"),
+                              env={"INTERVIEWLY_HOME": str(alias)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    DOSSIER = ("---\nslug: taskly-api\ncode: yes\n---\n\n# Taskly API\n\n## Summary\nA todo API.\n\n"
+               "## Stack\nFastAPI, SQLite.\n\n## Weak spots\n- No rate limit.\n\n### Detail\nStill weak spots.\n\n"
+               "## Numbers\n2 tests.\n")
+
+    def test_dossier_prints_only_the_named_sections(self):
+        self.write("projects/taskly-api.md", self.DOSSIER)
+        out = self.run_cli("dossier", "taskly-api", "Numbers", "Summary")
+        self.assertEqual(out, "## Summary\nA todo API.\n\n## Numbers\n2 tests.\n")   # the dossier's own order
+        out = self.run_cli("dossier", "taskly-api", "weak spots")                       # headings match in any case
+        self.assertEqual(out, "## Weak spots\n- No rate limit.\n\n### Detail\nStill weak spots.\n\n")
+        for args in (("--top", "Stack"), ("Stack", "--top")):
+            out = self.run_cli("dossier", "taskly-api", *args)
+            self.assertTrue(out.startswith("---\nslug: taskly-api\n"), args)
+            self.assertTrue(out.endswith("# Taskly API\n\n## Stack\nFastAPI, SQLite.\n\n"), args)
+        self.assertEqual(self.run_cli("dossier", "taskly-api", "--top"), "---\nslug: taskly-api\ncode: yes\n---\n\n# Taskly API\n\n")
+        self.assertEqual(self.run_cli("dossier", "taskly-api"), self.DOSSIER)           # nothing named: all of it
+        result = self.run_raw("dossier", "taskly-api", "Summary", "Explain-risk")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "## Summary\nA todo API.\n\n")
+        self.assertIn('no "## Explain-risk" section', result.stderr)
+
+    def test_dossier_takes_a_slug_never_a_path(self):
+        self.write("projects/taskly-api.md", self.DOSSIER)
+        self.write("cv.md", self.CV)
+        for slug in ("../cv", "projects/taskly-api", str(self.home / "cv"), "..", ""):
+            result = self.run_raw("dossier", slug, "Summary")
+            self.assertEqual(result.returncode, 1, slug)
+            self.assertIn("isn't a project slug", result.stderr, slug)
+            self.assertEqual(result.stdout, "", slug)
+        result = self.run_raw("dossier", "clipper")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("There are dossiers for: taskly-api", result.stderr)   # a wrong slug shows the right ones
+        (self.home / "projects/taskly-api.md").unlink()
+        result = self.run_raw("dossier", "clipper")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("No project has been analysed yet", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_cli_works_in_isolated_mode(self):
         """python -I and PYTHONSAFEPATH (3.11+) leave the script's folder off sys.path: iv adds it itself."""
         self.write("cv.md", self.CV)

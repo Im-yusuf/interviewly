@@ -29,10 +29,10 @@
 
 `projects/<slug>.md`, written by the project-analyst agent (the format is in `agents/project-analyst.md`). After its frontmatter come these `## ` sections: Summary, Stack, Architecture, Components, Key flows, Decisions and trade-offs, Non-obvious details, Weak spots, Probe points, CV claims vs code, Numbers, How it was built, Explain-risk. A CV-only dossier (`code: no`) has only Summary, CV claims vs code, Probe points and Weak spots.
 
-Dossiers are long. Read only the sections a skill names, for example:
+Dossiers are long. Read only the sections a skill names, with `iv dossier` (in `common.md`), for example:
 
 ```bash
-awk '/^## /{p=/^## (Summary|CV claims vs code|Numbers)$/} p' "<HOME_DIR>/projects/<slug>.md"
+iv dossier "<slug>" "Summary" "CV claims vs code" "Numbers"
 ```
 
-Without `awk`, read the file and use only those sections.
+`--top` adds the frontmatter. It prints the sections in the dossier's own order and says on standard error which ones the dossier doesn't have. For a whole dossier, use your file-reading tool.

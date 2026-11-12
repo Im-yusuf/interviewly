@@ -24,13 +24,15 @@ python3 scripts/build_antigravity.py        # rebuild dist/ after changing skill
 claude plugin validate . --profile directory --strict   # manifest, frontmatter and plugin-directory checks
 ```
 
-The unit tests also fail if `dist/antigravity` is out of date, if the Claude Code and Codex manifests disagree, if the README or `docs/commands.md` misses a command, if a link between the docs is broken, if a skill reads the plugin's reference files with a shell command or names one that doesn't exist, or if a file you'd commit has an email, home-folder path or phone number that isn't one of the fictional samples. CI runs the tests on Linux, macOS and Windows, and the validator on a fresh checkout.
+The unit tests also fail if `dist/antigravity` is out of date, if the Claude Code and Codex manifests disagree, if the README or `docs/commands.md` misses a command, if a link between the docs is broken, if a skill reads the plugin's reference files with a shell command or names one that doesn't exist, if a skill's `allowed-tools` line changes or it uses a command Claude Code can't check (`${VAR:-default}`, `awk`), or if a file you'd commit has an email, home-folder path or phone number that isn't one of the fictional samples. CI runs the tests on Linux, macOS and Windows, and the validator on a fresh checkout.
 
 The evals run real model sessions on your own account, so they take a while and cost money: a full run at the default 3 runs per case costs roughly $15–25. Run the cases your change touches, with `--runs 1` while you iterate:
 
 ```bash
 claude plugin eval . --case <name> --scaffold --allow-tools Bash Write Edit WebFetch --runs 1
 ```
+
+Every case's `append_system_prompt` makes `./state` the home folder and has the helper called with `INTERVIEWLY_HOME=<that path>` in front. Copy that line as it is into a new case.
 
 The `analyst-ignores-injection` and `target-hostile-job-ad` cases plant instructions for AI agents in a fixture repo and a job ad. Keep those payloads inert (a marker file, links on `example.invalid`), and keep hostile fixtures in `evals/fixtures/`, never in `examples/`.
 
@@ -41,6 +43,8 @@ The `analyst-ignores-injection` and `target-hostile-job-ad` cases plant instruct
 - Keep skill descriptions to about 130 characters, with the trigger noun first and the "Use for …" phrases that matter most. Hosts with many skills drop descriptions, so the name and the first words carry the routing.
 - Reference files are read whole, with the host's file-reading tool, so keep each one small and about one thing. A skill names the files it needs in its first step. Never tell a skill or agent to cut a section out of the plugin folder with `sed`, `awk` or `grep`: Claude Code treats `sed` with a pattern as an edit, and refuses it or stops to ask the user.
 - A rule or a file format lives in one reference file only. Point to it from the others, never copy it.
+- Claude Code asks the user before a skill reads or runs anything outside their project. Every SKILL.md carries the same `allowed-tools` line, which lets two things through while a command starts: reading the plugin folder, and the helper typed as `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" <command>`. Don't widen it, and never pre-approve anything that reads or runs the user's code. Keep `iv` to the home folder: a file named on its command line must be in there. Other hosts ignore the line, and the Antigravity build drops it. [Troubleshooting](docs/troubleshooting.md#permission-prompts) tells users what it covers, so change the two together.
+- To see what a normal session would ask about, run a command with none of your own allow rules, from an empty folder, with `INTERVIEWLY_HOME` set to a scratch copy of `evals/fixtures/state`: `claude -p --model haiku --plugin-dir <this repo> --setting-sources project,local --output-format stream-json --verbose "/interviewly:drill 4"`. Each refused call in the output is one the user would have been asked about, and `permission_denials` in the last line counts them. A run costs about a cent.
 - Skills and agents that read repos, CVs, job ads or the web follow `references/safety.md`. Never put free text on a command line: pass it to `iv` as JSON through a quoted heredoc.
 - Scripts use the standard library only, read and write UTF-8 explicitly, and must run on Python 3.8.
 - Examples, tests and evals use the fictional sample data in `examples/` and `evals/fixtures/` (Sam Rivera, Taskly, Clipper, Brightline Media, Acme) and reserved addresses such as `sam@example.com`. Never use a real person's CV, projects or contact details.

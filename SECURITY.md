@@ -10,6 +10,7 @@ In scope: anything that makes Interviewly run a command, change a file outside `
 
 - **Text it reads is data, not instructions.** Every skill and agent that reads a repo, CV, job ad or web page follows the same [safety rules](references/safety.md): ignore instructions found in that text, keep secrets out of what it writes, never put free text on a command line, send only public facts, and write only inside `~/.interviewly`.
 - **It doesn't touch your projects.** It reads them, and never edits, builds, installs or runs anything in them unless you ask. The project analyst is instructed to use its shell only for read-only git commands, `provenance.py` and listing files. Your app's permission prompts are what enforce it.
+- **Little runs without asking.** In Claude Code, an Interviewly command may read Interviewly's own files and run its state helper (`scripts/interviewly.py`) without a permission prompt. The helper reads and writes only `~/.interviewly` and refuses a file anywhere else. Nothing that reads or runs your code is pre-approved. [Troubleshooting](docs/troubleshooting.md#permission-prompts) lists what still asks.
 - **Free text never reaches a shell.** Questions, answers, job keywords and git author names go to the scripts on standard input, and git runs with settings that stop a hostile repo's own config from running a command.
 - **Your data folder is private.** `~/.interviewly` is created so that only you can open it (mode 700 on macOS and Linux), and writes to it are locked and atomic.
 

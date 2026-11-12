@@ -21,6 +21,8 @@ Your CV and code are read by the AI model your app uses (Claude in Claude Code, 
 
 It never edits, builds, installs or runs anything in your projects unless you ask.
 
+**What runs without a prompt.** In Claude Code, while an Interviewly command starts, two things don't ask you first: reading Interviewly's own files, and running `scripts/interviewly.py`, which reads and writes only `~/.interviewly` and refuses a file anywhere else. Reading your projects, git and every other script ask as usual. [Troubleshooting](docs/troubleshooting.md#permission-prompts) lists what is covered and what still asks.
+
 ## What it saves
 
 Everything Interviewly saves is plain files in `~/.interviewly` (or the folder in `$INTERVIEWLY_HOME`), created so that only you can open it. [How it works](docs/how-it-works.md#your-data) lists every file. Nothing is written anywhere else.

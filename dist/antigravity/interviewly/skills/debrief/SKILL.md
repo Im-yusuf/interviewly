@@ -13,7 +13,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. Read `profile.json`, `stories.md` and `audit.md` if they exist. Read the dossiers in step 3, for the projects the questions touched. Debriefs work without a profile too; there's just less to ground the better answers in.
 3. Work out the target: match the arguments against `targets/` (company or slug), otherwise use `profile.active_target`. Read it, plus any earlier debriefs for the same company in `debriefs/`.
 4. The arguments start with `outcome`, or the user says how it ended ("I got the offer", "they said no", "I'm through to the next round")? Go to **Outcome** at the end.

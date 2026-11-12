@@ -19,9 +19,9 @@ Set up: run the matching skill with their words, and stop. Not set up: run prep 
 
 ## 0. Returning user?
 
-Resolve `HOME_DIR` (`echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`) and check the tools in one call: `python3 --version; git --version`. No `python3`? Use `python` or `py -3` in its place if either is 3.8+. With neither, say that saving progress and reading PDF or Word CVs need Python 3.8+ (python.org), and offer likely questions or a short mock from a pasted CV, saving nothing. No git? Say code can still be read from folders, but not cloned or traced to its authors.
+Resolve `HOME_DIR` with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`, then check the tools with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" doctor` (two calls). The doctor's lines say whether Python is 3.8 or newer, whether git is there, and whether a profile is set up. No `python3`? Use `python` or `py -3` in its place if either is 3.8+. With neither, say that saving progress and reading PDF or Word CVs need Python 3.8+ (python.org), and offer likely questions or a short mock from a pasted CV, saving nothing. No git? Say code can still be read from folders, but not cloned or traced to its authors.
 
-If `HOME_DIR/profile.json` exists, the user is set up:
+If the doctor says `Profile: set up` (`HOME_DIR/profile.json` exists), the user is set up:
 - **A new job ad** (and no CV): run the `interviewly:target` skill with it, without `quick`, so it asks for the interview date. Don't ask for the CV or code again. Then do what they asked for, or ask with options: **Likely questions for this job (Recommended)** · **Practice interview** (both as in the menu below).
 - **A CV (a file or pasted), or "update my CV":** run the `interviewly:setup` skill with it (its **Update my CV** path), then handle any job ad as above.
 - **Something specific:** route it as **Where requests go** says.
@@ -109,7 +109,7 @@ In quick mode these skills ask the user nothing (setup still asks which repos to
 
 ### The full question guide
 
-Write `HOME_DIR/guides/<target-slug or "general">-questions.md`: the **15 questions they're most likely to get**, grouped by interview stage (screen, technical, system design, behavioral). The screen stage starts with "Tell me about yourself": a 60–90 second answer (who they are now, one or two proof points from the CV and code, and why this role: the user's own reason, or the gap `[why you want this role]`), practised with `/interviewly:walkthrough pitch`. Draw on the target's predicted questions and logistics, each dossier's probe points (`awk '/^## /{p=/^## (Weak spots|Probe points|CV claims vs code)$/} p' "<dossier>"`), and the riskiest CV claims. For each question:
+Write `HOME_DIR/guides/<target-slug or "general">-questions.md`: the **15 questions they're most likely to get**, grouped by interview stage (screen, technical, system design, behavioral). The screen stage starts with "Tell me about yourself": a 60–90 second answer (who they are now, one or two proof points from the CV and code, and why this role: the user's own reason, or the gap `[why you want this role]`), practised with `/interviewly:walkthrough pitch`. Draw on the target's predicted questions and logistics, each dossier's probe points (`iv dossier "<slug>" "Weak spots" "Probe points" "CV claims vs code"`), and the riskiest CV claims. For each question:
 - **Why they'll ask:** the job requirement, CV line or code that triggers it
 - **Your answer:** 60–120 words in the first person, answer first, grounded in their CV and code with file references. Never make up facts about their work: leave a gap that names what's missing, such as `[your part in it]`.
 - **Watch out for:** the follow-up it invites

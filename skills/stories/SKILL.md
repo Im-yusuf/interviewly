@@ -2,6 +2,7 @@
 name: stories
 description: STAR story bank. True stories from the user's own work for behavioral questions. Use for "tell me about a time…" or STAR answers.
 argument-hint: "[category] | practice"
+allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)
 ---
 
 # Story bank
@@ -12,9 +13,9 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-projects.md` (the project index and the dossiers). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-projects.md` (the project index and the dossiers). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. No `profile.json`? Run the `interviewly:start` skill instead, telling it the user wants behavioral stories.
-3. Read `cv.md`, `stories.md` (if it exists), the active target (if any), and the behavioral table at the end of `${CLAUDE_PLUGIN_ROOT}/references/question-patterns.md` (search that file for the `## Behavioral` heading, then read from that line with your file-reading tool). From each dossier, read only **Summary**, **Decisions and trade-offs**, **Non-obvious details**, **Weak spots** and **How it was built** (with `awk`, as *Dossiers* in `state-projects.md` shows).
+3. Read `cv.md`, `stories.md` (if it exists), the active target (if any), and the behavioral table at the end of `${CLAUDE_PLUGIN_ROOT}/references/question-patterns.md` (search that file for the `## Behavioral` heading, then read from that line with your file-reading tool). From each dossier, read only **Summary**, **Decisions and trade-offs**, **Non-obvious details**, **Weak spots** and **How it was built** (with `iv dossier`, as *Dossiers* in `state-projects.md` shows).
 4. If the argument is `practice`, run the `interviewly:interview` skill with arguments `behavioral hiring-manager` and stop.
 5. If the argument is a category (challenge, failure, conflict, …), work only on that category.
 

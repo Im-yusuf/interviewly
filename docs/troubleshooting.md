@@ -20,6 +20,38 @@ Install Python from [python.org](https://www.python.org/downloads/). On Windows,
 **git isn't installed.**
 It still reads folders on your machine. It can't clone repos or work out who wrote what until git is there.
 
+## Permission prompts
+
+**Claude Code asks for permission when a command starts.**
+Interviewly keeps its rules and your data outside your project folder, and Claude Code asks before it touches anything out there. So that a command doesn't open with a run of prompts, each Interviewly command tells Claude Code that two things need no prompt:
+
+- reading Interviewly's own files in the plugin folder (its instructions and rules, nothing of yours)
+- running Interviewly's helper script, `scripts/interviewly.py`. It keeps the practice schedule, names new session files and prints parts of Interviewly's notes on your projects. It reads and writes only your Interviewly folder (`~/.interviewly`) and refuses a file anywhere else. It can also open a report it made in your browser, and use a headless browser to turn one into a share image.
+
+That covers the message that started the command, and any agent started during it. Everything else asks, as before:
+
+- reading or writing files in `~/.interviewly` with Claude Code's own file tools (your CV, transcripts, notes)
+- reading your projects, running git on them, and every other script
+- the helper typed any other way: joined to another command, pointed at a different folder, or handed text to save
+- anything on a later message in the same session, the helper included (scoring an answer, the report at the end)
+
+If you start a command in plain words ("drill me") instead of typing `/interviewly:drill`, Claude Code asks whether to use that skill, because the skill comes with these two approvals. Codex and Antigravity ignore them and ask according to your own settings there.
+
+**I'd rather not be asked.**
+There are two things you can allow yourself, under `permissions.allow` in `~/.claude/settings.json`. Each is your call, and each applies in every session.
+
+```json
+{ "permissions": { "allow": ["Skill(interviewly:*)"] } }
+```
+
+Claude Code may then start any Interviewly command from plain words without asking. A command still gets only the two approvals above.
+
+```json
+{ "permissions": { "allow": ["Read(~/.interviewly/**)", "Edit(~/.interviewly/**)"] } }
+```
+
+Claude Code may then read and change any file in `~/.interviewly` without asking, whether or not an Interviewly command is running. Don't add this one if `~/.interviewly/repos` has anything in it: that folder holds the copies of repositories you asked Interviewly to clone, and reading code should keep its prompt ([SECURITY.md](../SECURITY.md) says why). If you moved the folder with `INTERVIEWLY_HOME`, write that path with two slashes at the start: `Read(//path/to/folder/**)`.
+
 ## Your CV
 
 **"This PDF has almost no text layer."**

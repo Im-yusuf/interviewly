@@ -33,8 +33,13 @@ input, through a heredoc with a quoted delimiter, or in a file with --file.
   audit-plan [--all]              which CV lines the audit must (re)check: new or changed lines, and lines
                                   whose project's code analysis is newer than their last check
   audit-merge PART.json...        merge assessed claims into audit.json and render audit.md
+  dossier SLUG [--top] [SECTION...]
+                                  the named "## " sections of projects/SLUG.md (--top adds the frontmatter),
+                                  or all of it when none is named
 
-A relative SESSION.json that isn't in the current folder is read from the home folder. Commands that change
+A relative SESSION.json that isn't in the current folder is read from the home folder. A file named on the
+command line (SESSION.json, SESSION.md, --file PATH, PART.json) must be in the home folder: skills run iv
+without the user being asked each time, so it never reads or rewrites a file anywhere else. Commands that change
 state hold HOME/.lock from read to write, so parallel calls queue instead of losing scores. While the active
 target's interview_date is ahead, reviews come back before it and more new topics are introduced each day.
 A new topic id is lowercase letters, digits, '.', '_' and '-' in two or more '/'-separated parts, each starting
@@ -176,20 +181,37 @@ def read_input(file):
     if not file:
         return read_stdin()
     try:
-        return read_text(file)
+        return read_text(in_home(file))
     except FileNotFoundError:
         sys.exit(f"not found: {file}")
     except (OSError, ValueError) as e:
         sys.exit(f"can't read {file}: {e}")
 
 
+def in_home(path):
+    """path, refused unless it's in the home folder. Skills run iv without the user being asked each time, so a
+    file named on its command line can't be one of the user's own somewhere else. Checked as written and with
+    links followed, so a subfolder linked to a synced folder passes, and so does the home folder spelled another
+    way (/tmp and /private/tmp on macOS)."""
+    path = Path(path).expanduser()
+    root = home()
+    for full in (os.path.abspath, os.path.realpath):
+        base, inner = full(root), full(path)
+        try:
+            if os.path.normcase(os.path.commonpath([base, inner])) == os.path.normcase(base):
+                return path
+        except ValueError:   # another drive, on Windows
+            pass
+    raise StateError(f"{path} isn't in the Interviewly folder ({root}): iv only reads and writes files there")
+
+
 def session_path(value):
-    """A session file named on the command line. A relative path that isn't in the current folder is looked up
-    in the home folder, so `sessions/<name>.json` works from any folder."""
+    """A session file named on the command line, which must be in the home folder. A relative path that isn't
+    in the current folder is looked up there, so `sessions/<name>.json` works from any folder."""
     path = Path(value).expanduser()
     if not path.is_absolute() and not path.exists() and (home() / path).exists():
         return home() / path
-    return path
+    return in_home(path)
 
 
 def replace(src, dst):
@@ -1187,7 +1209,7 @@ def cmd_audit_merge(args):
              for match in (sorted(glob.glob(part)) if glob.has_magic(part) and not os.path.exists(part) else [part])]
     if not paths:
         raise StateError(f"no part files match {', '.join(args.parts)}")
-    parts = [(part, *load_part(part)) for part in paths]
+    parts = [(part, *load_part(in_home(part))) for part in paths]
 
     def written(part):
         try:
@@ -1235,6 +1257,42 @@ def cmd_audit_merge(args):
 
 def cmd_home(args):
     print(home())
+
+
+def dossier_sections(text, wanted, top):
+    """The `## ` sections of a dossier whose headings are in wanted, in the order the file has them, each up to
+    the next `## ` heading. top adds what comes before the first heading (the frontmatter). Returns the text
+    and the wanted headings the dossier doesn't have."""
+    names = {w.strip().casefold(): w for w in wanted}
+    found, out, keep = set(), [], top
+    for line in text.splitlines(keepends=True):
+        if line.startswith("## "):
+            heading = line[3:].strip().casefold()
+            keep = heading in names
+            if keep:
+                found.add(heading)
+        if keep:
+            out.append(line)
+    return "".join(out), [names[n] for n in names if n not in found]
+
+
+def cmd_dossier(args):
+    slug = safe_slug(args.slug)
+    if not slug:
+        sys.exit(f"dossier: {args.slug!r} isn't a project slug (see projects/index.json)")
+    try:
+        text = read_text(home() / "projects" / f"{slug}.md")
+    except FileNotFoundError:
+        have = sorted(p.stem for p in (home() / "projects").glob("*.md"))
+        sys.exit(f"dossier: projects/{slug}.md isn't there. "
+                 + (f"There are dossiers for: {', '.join(have)}" if have else "No project has been analysed yet"))
+    if not args.sections and not args.top:
+        sys.stdout.write(text)
+        return
+    part, missing = dossier_sections(text, args.sections, args.top)
+    sys.stdout.write(part)
+    for name in missing:
+        warn(f"dossier: projects/{slug}.md has no \"## {name}\" section")
 
 
 def cmd_stamp(args):
@@ -1920,6 +1978,11 @@ def main():
     c = sub.add_parser("audit-merge")
     c.add_argument("parts", nargs="+")
     c.set_defaults(fn=cmd_audit_merge)
+    c = sub.add_parser("dossier")
+    c.add_argument("slug")
+    c.add_argument("sections", nargs="*", help='the "## " headings to print, each in quotes')
+    c.add_argument("--top", action="store_true", help="also print what comes before the first heading (the frontmatter)")
+    c.set_defaults(fn=cmd_dossier)
     args = p.parse_args()
     if args.command == "due" and args.fill and not args.limit:
         d.error("--fill needs --limit N: it tops the queue up to N")

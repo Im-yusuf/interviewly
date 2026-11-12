@@ -2,6 +2,7 @@
 name: audit
 description: CV claim audit. Checks each CV line against the code. Use for "check my CV", "check my resume" or "what could catch me out?".
 argument-hint: "[grill | quick] [--all]"
+allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)
 ---
 
 # CV claim audit
@@ -12,12 +13,12 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-projects.md` (the project index and the dossiers). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-projects.md` (the project index and the dossiers). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. No `profile.json`? Run the `interviewly:start` skill instead, telling it the user wants their CV checked.
 3. **Quick mode** (the arguments include `quick`; the cv and start skills send this, because they carry on after the audit): ask the user nothing, and skip section 4 (**In chat, then grill**). Instead, end by returning a short summary of no more than four lines: how many claims are high and medium risk, the riskiest claim in one line, any rewritten CV that has a contradicted claim, and the path to `audit.md`.
 4. **Work out what needs checking:** `iv audit-plan` (add `--all` if the user asked for a full re-audit). It returns `recheck` (the CV lines that are new, changed, or belong to a project whose code analysis is newer than their last check, each with an `id`, its `text`, `section`, `heading` and `reason`), `keep` (lines already assessed and still current), `groups` (the lines to recheck, grouped by role or project), `skills` (the skills lines) and `refresh_overview`.
 5. If `recheck` is empty and `refresh_overview` is false, the audit is current: say so in one line, then go to section 4 (or straight to the grilling if the argument is `grill`; in quick mode, return the summary).
-6. Read `profile.json` and only the dossiers the lines to recheck belong to (`projects/index.json` maps names to slugs), and only their **CV claims vs code**, **Weak spots**, **Numbers**, **How it was built** and **Explain-risk** sections (with `awk`, as *Dossiers* in `state-projects.md` shows). For the overview, add **Components** and **Non-obvious details**. When the plan keeps any lines, also read the current `audit.md` and carry over what its overview says about the lines and projects you aren't rechecking. Post a one-line note of what you're checking, e.g. "Checking 6 changed lines; 36 are unchanged since the last audit."
+6. Read `profile.json` and only the dossiers the lines to recheck belong to (`projects/index.json` maps names to slugs), and only their **CV claims vs code**, **Weak spots**, **Numbers**, **How it was built** and **Explain-risk** sections (with `iv dossier`, as *Dossiers* in `state-projects.md` shows). For the overview, add **Components** and **Non-obvious details**. When the plan keeps any lines, also read the current `audit.md` and carry over what its overview says about the lines and projects you aren't rechecking. Post a one-line note of what you're checking, e.g. "Checking 6 changed lines; 36 are unchanged since the last audit."
 
 ## 1. Assess the lines to recheck
 
