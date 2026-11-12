@@ -88,7 +88,8 @@ HOME_DIR/
 │                           file to send), <First>-<Last>-CV.md (its editable source), changes.md and ats-report.md
 ├── linkedin/
 │   ├── profile.md          the user's own LinkedIn profile as they gave it (/interviewly:linkedin)
-│   └── suggested.md        its findings and the new text to paste in, checked against LinkedIn's limits
+│   ├── suggested.md        its findings and the new text to paste in, checked against LinkedIn's limits
+│   └── paste-sheet.html    that text as a page with a copy button per field (generated, safe to delete)
 ├── stories.md              STAR story bank (/interviewly:stories) and the `## Pitch` (/interviewly:walkthrough pitch)
 ├── sessions/
 │   ├── <YYYY-MM-DD-HHMM>-<mode>.md     interview and drill transcripts

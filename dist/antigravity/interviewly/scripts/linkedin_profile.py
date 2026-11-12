@@ -3,6 +3,7 @@
 
     linkedin_profile.py read <export.zip | export folder>    print the profile as Markdown
     linkedin_profile.py limits <suggested.md>                check each section's length
+    linkedin_profile.py sheet <suggested.md> [--open]        write paste-sheet.html next to it: one copy button per field
 
 The export is what LinkedIn sends for "Get a copy of your data" (Settings & Privacy → Data privacy). It can
 also hold messages, connections, contacts and more. This script opens only the profile files named in CORE
@@ -12,6 +13,7 @@ message or another person's details.
 Standard library only. Nothing here opens a network connection.
 """
 import csv
+import html
 import io
 import re
 import sys
@@ -168,7 +170,17 @@ def read_profile(path):
     return "\n".join(out) + "\n"
 
 
-# --- checking suggested text ---
+# --- the suggested text ---
+
+# Where each field is edited on the user's own profile page.
+WHERE = {
+    "headline": "Your profile → the pencil by your name (Edit intro) → Headline",
+    "about": "Your profile → About → the pencil",
+    "experience": "Your profile → Experience → the pencil on this role → Description",
+    "project": "Your profile → Projects → the pencil on this project → Description",
+    "skills": "Your profile → Skills: put these first",
+}
+
 
 def length(text):
     """Characters as LinkedIn's editor counts them: an emoji outside the basic plane is two."""
@@ -193,12 +205,46 @@ def sections(markdown):
     return out
 
 
+def profile_items(markdown):
+    """The profile fields in a suggested-text file, in order: kind, label, text and limit (None for skills)."""
+    items = []
+    for heading, body in sections(markdown):
+        kind = heading.split(":", 1)[0].strip().lower()
+        if not body:
+            continue
+        if kind == "headline":
+            options = [re.sub(r"^(?:[-*•]|\d+[.)])\s+", "", l).strip() for l in body.split("\n") if l.strip()]
+            for i, option in enumerate(options, 1):
+                label = "Headline" if len(options) == 1 else f"Headline option {i}"
+                items.append({"kind": "headline", "label": label, "text": option, "limit": LIMITS["headline"]})
+        elif kind == "about":
+            items.append({"kind": "about", "label": "About", "text": body, "limit": LIMITS["about"]})
+        elif kind == "experience":
+            items.append({"kind": "experience", "label": heading, "text": body, "limit": LIMITS["experience"]})
+        elif kind in ("project", "projects"):
+            items.append({"kind": "project", "label": heading, "text": body, "limit": LIMITS["project"]})
+        elif kind == "skills":
+            items.append({"kind": "skills", "label": "Skills", "text": body, "limit": None})
+    return items
+
+
+def change_notes(markdown):
+    """The lines of the Changes section: what else to change by hand, and why."""
+    for heading, body in sections(markdown):
+        if heading.strip().lower() == "changes":
+            return [re.sub(r"^(?:[-*•]|\d+[.)])\s+", "", l).strip() for l in body.split("\n") if l.strip()]
+    return []
+
+
 def check_limits(markdown):
     """(lines to print, whether anything needs fixing)."""
     lines, bad, checked = [], False, 0
-
-    def report(label, text, limit):
-        nonlocal bad, checked
+    for item in profile_items(markdown):
+        label, text, limit = item["label"], item["text"], item["limit"]
+        if limit is None:
+            listed = [s for s in re.split(r"[,\n]", text) if s.strip(" -*•")]
+            lines.append(f"     Skills: {len(listed)} listed")
+            continue
         checked += 1
         n = length(text)
         if n > limit:
@@ -211,31 +257,12 @@ def check_limits(markdown):
             bad = True
             shown = ", ".join("a link in [text](address) form" if m.startswith("[") else m for m in marks)
             lines.append(f"!    {label}: has Markdown ({shown}), which LinkedIn shows as typed. Use plain text.")
-
-    for heading, body in sections(markdown):
-        kind = heading.split(":", 1)[0].strip().lower()
-        if not body:
-            continue
-        if kind == "headline":
-            options = [re.sub(r"^(?:[-*•]|\d+[.)])\s+", "", l).strip() for l in body.split("\n") if l.strip()]
-            for i, option in enumerate(options, 1):
-                label = "Headline" if len(options) == 1 else f"Headline option {i}"
-                report(label, option, LIMITS["headline"])
-                if length(option) > HEADLINE_IN_SEARCH:
-                    lines.append(f"     search results show about the first {HEADLINE_IN_SEARCH}: "
-                                 f"\"{option[:HEADLINE_IN_SEARCH].rstrip()}\"")
-        elif kind == "about":
-            report("About", body, LIMITS["about"])
-            if length(body) > ABOUT_BEFORE_MORE:
-                lines.append(f"     the profile shows about the first {ABOUT_BEFORE_MORE} before \"see more\": it ends at "
-                             f"\"…{body[:ABOUT_BEFORE_MORE].rstrip()[-40:]}\"")
-        elif kind == "experience":
-            report(heading, body, LIMITS["experience"])
-        elif kind in ("project", "projects"):
-            report(heading, body, LIMITS["project"])
-        elif kind == "skills":
-            items = [s for s in re.split(r"[,\n]", body) if s.strip(" -*•")]
-            lines.append(f"     Skills: {len(items)} listed")
+        if item["kind"] == "headline" and n > HEADLINE_IN_SEARCH:
+            lines.append(f"     search results show about the first {HEADLINE_IN_SEARCH}: "
+                         f"\"{text[:HEADLINE_IN_SEARCH].rstrip()}\"")
+        if item["kind"] == "about" and n > ABOUT_BEFORE_MORE:
+            lines.append(f"     the profile shows about the first {ABOUT_BEFORE_MORE} before \"see more\": it ends at "
+                         f"\"…{text[:ABOUT_BEFORE_MORE].rstrip()[-40:]}\"")
     if not checked:
         bad = True
         lines.append("!    nothing to check: the file needs sections headed '## Headline', '## About', "
@@ -243,23 +270,127 @@ def check_limits(markdown):
     return lines, bad
 
 
+# --- the paste sheet ---
+
+SHEET_CSS = """
+:root { --bg:#f6f7f9; --card:#fff; --text:#1c1f24; --muted:#5d6672; --line:#dfe3e8; --accent:#0a66c2; --ok:#1a7f37; --bad:#c62828; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#15161a; --card:#1d1f24; --text:#ececef; --muted:#9aa2ad; --line:#30343b; --accent:#70b5f9; --ok:#6bc46d; --bad:#f47067; }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width:760px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:26px; margin:0 0 6px; }
+.lead { color:var(--muted); margin:0 0 24px; }
+section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:0 0 16px; }
+section.done { opacity:.55; }
+h2 { font-size:17px; margin:0; }
+.where { color:var(--muted); font-size:14px; margin:2px 0 10px; }
+textarea { width:100%; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); padding:10px; font:inherit; resize:vertical; }
+.row { display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap; }
+button { font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:999px; padding:7px 18px; cursor:pointer; }
+@media (prefers-color-scheme: dark) { button { color:#0b1a2b; } }
+.count { font-size:14px; color:var(--ok); }
+.count.over { color:var(--bad); font-weight:600; }
+label { font-size:14px; color:var(--muted); margin-left:auto; cursor:pointer; }
+ul { margin:8px 0 0; padding:0; list-style:none; }
+li { margin:6px 0; }
+li label { margin:0; color:var(--text); font-size:15px; display:flex; gap:8px; align-items:flex-start; }
+li input { margin-top:5px; }
+"""
+
+SHEET_JS = """
+document.querySelectorAll('button[data-copy]').forEach(function (button) {
+  button.addEventListener('click', function () {
+    var box = document.getElementById(button.getAttribute('data-copy'));
+    var done = function () { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1500); };
+    var fallback = function () {
+      box.focus(); box.select();
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+      if (ok) { done(); } else { button.textContent = 'Selected: now press Ctrl+C or ⌘C'; }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(box.value).then(done, fallback); }
+    else { fallback(); }
+  });
+});
+document.querySelectorAll('input[data-done]').forEach(function (tick) {
+  tick.addEventListener('change', function () { tick.closest('section').classList.toggle('done', tick.checked); });
+});
+"""
+
+
+def paste_sheet(markdown):
+    """A page with one copy button per profile field. Self-contained: it loads nothing and sends nothing."""
+    items = profile_items(markdown)
+    if not any(item["limit"] for item in items):
+        return None
+    esc = html.escape
+    cards = []
+    for i, item in enumerate(items):
+        text, limit = item["text"], item["limit"]
+        if limit is None:
+            count = ""
+        else:
+            n = length(text)
+            count = f'<span class="count{" over" if n > limit else ""}">{n} / {limit} characters</span>'
+        rows = min(18, max(2, text.count("\n") + 1 + len(text) // 90))
+        cards.append(
+            f'<section><h2>{esc(item["label"])}</h2><p class="where">{esc(WHERE[item["kind"]])}</p>'
+            f'<textarea id="field-{i}" rows="{rows}" readonly>{esc(text)}</textarea>'
+            f'<div class="row"><button type="button" data-copy="field-{i}">Copy</button>{count}'
+            f'<label><input type="checkbox" data-done> Done</label></div></section>')
+    notes = change_notes(markdown)
+    if notes:
+        ticks = "".join(f'<li><label><input type="checkbox"> <span>{esc(note)}</span></label></li>' for note in notes)
+        cards.append(f'<section><h2>What changed, and what to change by hand</h2><ul>{ticks}</ul></section>')
+    return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; "
+            "script-src 'unsafe-inline'\">"
+            f"<title>LinkedIn paste sheet</title><style>{SHEET_CSS}</style></head><body><main>"
+            "<h1>LinkedIn paste sheet</h1>"
+            '<p class="lead">Each box is one field on your profile. Copy it, paste it into LinkedIn, save, and tick it off. '
+            "This page is a file on your machine: it loads nothing and sends nothing.</p>"
+            + "".join(cards) + f"</main><script>{SHEET_JS}</script></body></html>\n")
+
+
+USAGE = ("usage: linkedin_profile.py read <export.zip | folder>\n"
+         "       linkedin_profile.py limits <suggested.md>\n"
+         "       linkedin_profile.py sheet <suggested.md> [--open]")
+
+
 def main():
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-    if len(sys.argv) != 3 or sys.argv[1] not in ("read", "limits"):
-        sys.exit("usage: linkedin_profile.py read <export.zip | folder>\n"
-                 "       linkedin_profile.py limits <suggested.md>")
-    path = Path(sys.argv[2]).expanduser()
+    args = [a for a in sys.argv[1:] if a != "--open"]
+    show = "--open" in sys.argv[1:]
+    if len(args) != 2 or args[0] not in ("read", "limits", "sheet") or (show and args[0] != "sheet"):
+        sys.exit(USAGE)
+    command, path = args[0], Path(args[1]).expanduser()
     if not path.exists():
         fail(f"not found: {path}")
     try:
-        if sys.argv[1] == "read":
+        if command == "read":
             sys.stdout.write(read_profile(path))
             return
         if path.is_dir():
             fail(f"{path.name} is a folder; give the suggested-text file")
-        lines, bad = check_limits(path.read_text(encoding="utf-8"))
+        markdown = path.read_text(encoding="utf-8")
+        if command == "sheet":
+            page = paste_sheet(markdown)
+            if page is None:
+                fail(f"{path.name} has no profile text yet: it needs sections headed '## Headline', '## About', "
+                     "'## Experience: <role>' or '## Project: <name>'")
+            out = path.with_name("paste-sheet.html")
+            with open(out, "w", encoding="utf-8", newline="\n") as file:    # Path.write_text has no newline before 3.10
+                file.write(page)
+            print(out)
+            if show:
+                import webbrowser
+                webbrowser.open(out.as_uri())
+            return
+        lines, bad = check_limits(markdown)
     except OSError as e:
         fail(f"can't read {path.name}: {e.strerror or e}")
     print("\n".join(lines))

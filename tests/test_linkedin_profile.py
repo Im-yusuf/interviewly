@@ -239,5 +239,63 @@ class LimitsTest(unittest.TestCase):
             self.assertIn("over Headline: 221/220", done.stdout)
 
 
+class SheetTest(unittest.TestCase):
+    def test_one_copy_box_per_field_with_where_it_goes(self):
+        page = linkedin_profile.paste_sheet(SUGGESTED)
+        self.assertEqual(page.count("<textarea "), 6)            # 2 headlines, About, a role, a project, skills
+        self.assertEqual(page.count('data-copy="field-'), 6)
+        self.assertIn("<h2>Headline option 2</h2>", page)
+        self.assertIn("Junior backend developer building Django and FastAPI services in London</textarea>", page)
+        self.assertIn("<h2>Experience: Junior Backend Developer, Brightline Media</h2>", page)
+        for where in ("Edit intro) → Headline", "About → the pencil", "pencil on this role → Description",
+                      "pencil on this project → Description", "Skills: put these first"):
+            self.assertIn(where, page)
+
+    def test_counts_are_shown_and_an_over_long_field_stands_out(self):
+        page = linkedin_profile.paste_sheet("## Headline\n" + "x" * 230 + "\n\n## About\nShort.\n")
+        self.assertIn('<span class="count over">230 / 220 characters</span>', page)
+        self.assertIn('<span class="count">6 / 2600 characters</span>', page)
+
+    def test_the_changes_become_a_checklist(self):
+        page = linkedin_profile.paste_sheet(SUGGESTED)
+        self.assertIn("What changed, and what to change by hand", page)
+        self.assertIn("<span>**Headline:** `Senior` removed. [Why](https://example.com) isn&#x27;t checked here.</span>", page)
+
+    def test_profile_text_cant_inject_markup(self):
+        page = linkedin_profile.paste_sheet('## About\n</textarea><script>alert("x")</script><img src=x onerror=y>\n\n'
+                                            "## Changes\n- <b onclick=z>bold</b>\n")
+        self.assertNotIn("<script>alert", page)
+        self.assertNotIn("<img", page)
+        self.assertNotIn("<b onclick", page)
+        self.assertIn("&lt;/textarea&gt;&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;", page)
+        self.assertEqual(page.count("<script>"), 1)             # the page's own copy buttons
+
+    def test_page_loads_nothing_from_anywhere(self):
+        page = linkedin_profile.paste_sheet(SUGGESTED)
+        self.assertIn("default-src 'none'", page)
+        for attribute in (" src=", " href=", "@import", "url("):
+            self.assertNotIn(attribute, page)
+
+    def test_a_file_with_no_profile_text_makes_no_sheet(self):
+        self.assertIsNone(linkedin_profile.paste_sheet("## Findings\n- The title doesn't match.\n"))
+        self.assertIsNone(linkedin_profile.paste_sheet("## Skills\nPython\n"))
+
+    def test_command_line_writes_the_sheet_next_to_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "suggested.md"
+            source.write_text(SUGGESTED, encoding="utf-8")
+            done = run("sheet", source)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            sheet = Path(tmp) / "paste-sheet.html"
+            self.assertEqual(Path(done.stdout.strip()).resolve(), sheet.resolve())
+            self.assertIn("<h2>About</h2>", sheet.read_text(encoding="utf-8"))
+            findings = Path(tmp) / "findings.md"
+            findings.write_text("## Findings\n- The title doesn't match.\n", encoding="utf-8")
+            done = run("sheet", findings)
+            self.assertNotEqual(done.returncode, 0)
+            self.assertIn("has no profile text yet", done.stderr)
+            self.assertIn("usage:", run("limits", source, "--open").stderr)    # --open is for the sheet only
+
+
 if __name__ == "__main__":
     unittest.main()

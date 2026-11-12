@@ -7,7 +7,7 @@ Interviewly has no server, no account and no telemetry. It is a set of instructi
 - **Your CV:** the file or text you give it.
 - **Your code:** the folders you point it at and the GitHub repos you confirm, including their git history. It never opens `.env` files, private keys or other credential files, and if it meets a secret anyway it writes `[redacted]`.
 - **Job ads** you paste or link.
-- **Your LinkedIn profile,** only if you give `/interviewly:linkedin` a copy of it: the PDF LinkedIn makes, pasted text, or your data export. From an export it opens only the profile files (Profile, Positions, Education, Skills, Projects and the like). It never opens your messages, connections or contacts, and it skips the date of birth and address in the profile file. It never signs in to LinkedIn or fetches a profile page.
+- **Your LinkedIn profile,** only if you give `/interviewly:linkedin` a copy of it: the PDF LinkedIn makes, pasted text, or your data export. From an export it opens only the profile files (Profile, Positions, Education, Skills, Projects and the like). It never opens your messages, connections or contacts, and it skips the date of birth and address in the profile file. It never fetches a profile page with a web tool, and it never signs in for you.
 
 Your CV and code are read by the AI model your app uses (Claude in Claude Code, OpenAI's models in Codex, Gemini in Antigravity), as in any session in that app. The app keeps its own conversation history, so what you paste stays there too.
 
@@ -38,6 +38,8 @@ Apart from what your AI app sends to its model, Interviewly uses the network onl
 Searches and fetched links never carry your name, contact details, CV text, private repository names or code.
 
 **Share images** are made only when you ask for one. They show the session type, score, label, streak and score bars, plus a project's name when GitHub says its repository is public. Never your answers or the feedback. Interviewly tells you what's in the image before you post it.
+
+**Edits to your LinkedIn profile** are made only if you ask for them, and only in a browser you're already signed in to that your AI app can drive. Interviewly shows you the list of edits first and changes nothing but your own profile. It never types a password, and it never opens your messages, your connections or anyone else's profile. LinkedIn's user agreement doesn't allow automated tools on its site, so Interviewly says so before it starts. The default is a paste sheet: a page on your machine that you copy from yourself.
 
 ## Deleting your data
 

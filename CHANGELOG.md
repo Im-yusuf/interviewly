@@ -5,10 +5,12 @@ All notable changes to Interviewly. Versions follow [semantic versioning](https:
 ## 0.11.0 · 2026-11-12
 
 - **Your LinkedIn profile.** `/interviewly:linkedin` reviews your own profile against your CV and your code. It lists where the two disagree (a title, a date, a number), which claims would be hard to defend in an interview, and what your code shows that the profile leaves out. Then it writes a new headline, About, role text, project entries and a top-five skills list for you to paste in, under the same rule as the CV rewrite: nothing invented, and safer wording only removes or softens. `check` stops after the findings.
-- **From a copy you give it.** It takes LinkedIn's Save to PDF, pasted text or your data export. It never signs in, fetches a profile address or posts. A new script reads the export and opens only the profile files: never your messages, connections or contacts, and never the date of birth or address in the profile file.
+- **From a copy you give it.** It takes LinkedIn's Save to PDF, pasted text or your data export. A new script reads the export and opens only the profile files: never your messages, connections or contacts, and never the date of birth or address in the profile file.
+- **A paste sheet.** The new text comes as a page on your machine with one box per field: a copy button, where the field is on LinkedIn, and its length. It loads nothing and sends nothing.
+- **Or it makes the edits for you.** `/interviewly:linkedin apply` works where your app can drive a browser you're already signed in to, such as Claude in Chrome. It shows the list of edits first, changes one field at a time while you watch, leaves "Notify network" off, and checks each field after saving. It never types a password or gets round a security check, and it touches nothing on LinkedIn but your own profile. LinkedIn's user agreement doesn't allow automated tools on its site, so it tells you that and asks before it starts.
 - **Lengths are counted, not guessed.** The same script checks every section against LinkedIn's limits (220 characters for a headline, 2,600 for the About, 2,000 for a role or project), shows where a search result or "see more" cuts it off, and flags Markdown that LinkedIn would show as typed.
 - **No CV yet?** A LinkedIn profile saved as a PDF now works as your starting CV in `/interviewly:start`.
-- **Checks.** Two new evals cover the profile check and the rewrite, and the export reader has its own unit tests.
+- **Checks.** Three new evals cover the profile check, the rewrite, and being asked to make the edits with no browser to drive. The export reader and the paste sheet have their own unit tests.
 
 ## 0.10.0 · 2026-11-10
 

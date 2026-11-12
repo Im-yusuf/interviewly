@@ -87,7 +87,7 @@ The name is a joke. It will never write you a script to bluff with. It teaches y
 | **Your CV and the job** | |
 | `/interviewly:audit` | Every CV claim checked against your code, with safer wording for the risky ones |
 | `/interviewly:cv` | An honest rewrite for a job, as one PDF that applicant tracking systems read. `cv new` writes a first CV |
-| `/interviewly:linkedin` | Your LinkedIn profile checked against your CV and code, with honest text to paste in |
+| `/interviewly:linkedin` | Your LinkedIn profile checked against your CV and code, rewritten honestly, and put in for you or pasted from a one-click sheet |
 | `/interviewly:target` | A job ad turned into fit, gaps, likely questions and company research |
 | `/interviewly:debrief` | After a real interview: stronger answers and what the next round will ask |
 | **Start, track and maintain** | |
@@ -140,7 +140,7 @@ Say **skip** when it asks for a job ad and pick **Check my CV first**. Once it h
 - **Take orders from a repo or a job ad.** Instructions hidden in what it reads are treated as text. No AI tool can fully rule that out, so keep your app's permission prompts on for code you didn't write.
 - **Nag.** At most one line a day, only when there's something worth practising, and you can turn it off.
 
-These are tested: [34 behaviour evals](evals/) run the skills on the sample projects, including a repo and a job ad with planted instructions, a request to inflate a CV, and interviews with known bluffs.
+These are tested: [35 behaviour evals](evals/) run the skills on the sample projects, including a repo and a job ad with planted instructions, a request to inflate a CV, and interviews with known bluffs.
 
 ## Install
 
@@ -190,7 +190,7 @@ Yes. It prepares you from your CV instead, and interviews focus on what you did,
 No. Ask it to add something you haven't done and it says no, in a sentence, and offers an honest alternative. A CV you can defend line by line does better in the interview than a padded one.
 
 **Does it connect to my LinkedIn account?**
-No. `/interviewly:linkedin` works from a copy of your own profile that you give it: LinkedIn's Save to PDF, pasted text, or your data export. It never signs in, reads anyone else's profile or posts, and you paste the new text in yourself.
+Not unless you ask. `/interviewly:linkedin` works from a copy of your own profile that you give it (LinkedIn's Save to PDF, pasted text, or your data export) and hands you a sheet with a copy button for each field. If your app can drive a browser you're already signed in to, such as Claude in Chrome, you can ask it to make the edits for you: it shows you the list first, changes one field at a time, and touches nothing but your own profile. It never types your password. LinkedIn's user agreement doesn't allow automated tools on its site, so that route is your call.
 
 **Which languages and frameworks?**
 Any. It reads whatever is in your repo, from React and FastAPI to Kubernetes, PyTorch and ffmpeg.

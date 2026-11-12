@@ -134,11 +134,14 @@ Rewrites your CV for a job (or `general` for none) and gives you one PDF that ap
 ```
 /interviewly:linkedin [profile.pdf | export.zip | export folder] [target]
 /interviewly:linkedin check
+/interviewly:linkedin apply
 ```
 
 Reviews your own LinkedIn profile against your CV and your code, then writes a new headline, About, role text, project entries and a top-five skills list for you to paste in. It finds where the profile and the CV disagree (titles, dates, numbers), which claims would be hard to defend in an interview, and what your code shows that the profile leaves out. Every section is checked against LinkedIn's length limits. `check` stops after the findings.
 
-Give it a copy of the profile: the PDF from **More → Save to PDF** on your profile page, the text pasted in, or the ZIP from **Settings & Privacy → Data privacy → Get a copy of your data**. It never signs in to LinkedIn, fetches a profile address or posts for you. From a data export it reads only the profile files, never your messages or connections.
+Give it a copy of the profile: the PDF from **More → Save to PDF** on your profile page, the text pasted in, or the ZIP from **Settings & Privacy → Data privacy → Get a copy of your data**. From a data export it reads only the profile files, never your messages or connections.
+
+Putting the text in: it builds a paste sheet, a page on your machine with one box per field, a copy button, where the field is on LinkedIn and its length. `apply` goes further when your app can drive a browser you're already signed in to (Claude in Chrome in Claude Code: turn it on with `/chrome`). It shows you the list of edits, then makes them one field at a time while you watch, and checks each one after saving. It never types your password, deals with a sign-in or security check, or touches messages, connections, posts or anyone else's profile. LinkedIn's user agreement doesn't allow automated tools on its site, so it says so and asks first; the paste sheet does the same job by hand.
 
 ### `/interviewly:target`
 
