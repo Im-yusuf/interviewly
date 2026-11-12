@@ -967,6 +967,62 @@ Python, FastAPI, Redis
                               env={"INTERVIEWLY_HOME": str(alias)})
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def nested_home(self):
+        """A home folder one level down, so the test owns the folder above it. Returns (above, home, run)."""
+        above = tempfile.TemporaryDirectory()
+        self.addCleanup(above.cleanup)
+        above = Path(above.name)
+        home = above / "home"
+        (home / "kept").mkdir(parents=True)
+        return above, home, lambda *args, cwd=None: self.run_raw(*args, cwd=cwd, env={"INTERVIEWLY_HOME": str(home)})
+
+    def test_a_relative_path_cannot_climb_out_of_the_home_folder(self):
+        """`sessions/x.json` is looked up in the home folder from anywhere. `../x.json` looked up the same way is a
+        file above it, and apply would rewrite it."""
+        above, home, run = self.nested_home()
+        review = json.dumps({"score": 3, "mode": "drill", "threads": []})
+        package = json.dumps({"name": "my-app", "scripts": {"test": "jest"}})
+        (above / "package.json").write_text(package, encoding="utf-8")
+        (above / "notes.md").write_text("## Q1\n**Answer:** I built it.\n", encoding="utf-8")
+        (home / "kept" / "k.json").write_text(review, encoding="utf-8")
+        elsewhere = above / "cwd" / "deeper"          # from here, ../package.json and ../notes.md don't exist
+        elsewhere.mkdir(parents=True)
+        for args in (("apply", "../package.json"), ("report", "../package.json"), ("share", "../package.json"),
+                     ("count", "../notes.md"), ("apply", "kept/../../package.json")):
+            result = run(*args, cwd=elsewhere)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertIn("isn't in the Interviewly folder", result.stderr, args)
+            self.assertEqual(result.stdout, "", args)
+        self.assertEqual((above / "package.json").read_text(encoding="utf-8"), package)
+        self.assertFalse((home / "reports").exists())
+        for path in ("kept/k.json", "kept/../kept/k.json"):          # `..` that stays inside is still fine
+            result = run("report", path, cwd=elsewhere)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need extra rights on Windows")
+    def test_dot_dot_after_a_linked_subfolder_is_followed_to_where_it_really_goes(self):
+        """With sessions linked to a synced folder, `sessions/..` is the folder above the link's target."""
+        above, home, run = self.nested_home()
+        review = json.dumps({"score": 3, "mode": "drill", "threads": []})
+        synced = above / "synced" / "sessions"
+        synced.mkdir(parents=True)
+        (home / "sessions").symlink_to(synced)
+        (home / "a").mkdir()
+        (home / "a" / "deep").symlink_to(synced)
+        for name in ("synced/sessions/ok.json", "synced/secret.json", "top.json"):
+            (above / name).write_text(review, encoding="utf-8")
+        for path in (home / "sessions" / ".." / "secret.json",        # really above/synced/secret.json
+                     home / "a" / "deep" / ".." / ".." / "top.json",   # really above/top.json
+                     Path("sessions") / ".." / "secret.json"):         # the same, looked up in the home folder
+            result = run("apply", str(path), cwd=above)              # where `sessions/…` isn't a folder
+            self.assertEqual(result.returncode, 1, path)
+            self.assertIn("isn't in the Interviewly folder", result.stderr, path)
+        for name in ("synced/secret.json", "top.json"):
+            self.assertEqual((above / name).read_text(encoding="utf-8"), review, name)   # not rewritten
+        result = run("apply", str(home / "sessions" / "ok.json"))    # the linked folder itself still works
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("scheduled", (synced / "ok.json").read_text(encoding="utf-8"))
+
     DOSSIER = ("---\nslug: taskly-api\ncode: yes\n---\n\n# Taskly API\n\n## Summary\nA todo API.\n\n"
                "## Stack\nFastAPI, SQLite.\n\n## Weak spots\n- No rate limit.\n\n### Detail\nStill weak spots.\n\n"
                "## Numbers\n2 tests.\n")

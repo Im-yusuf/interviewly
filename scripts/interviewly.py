@@ -192,10 +192,11 @@ def in_home(path):
     """path, refused unless it's in the home folder. Skills run iv without the user being asked each time, so a
     file named on its command line can't be one of the user's own somewhere else. Checked as written and with
     links followed, so a subfolder linked to a synced folder passes, and so does the home folder spelled another
-    way (/tmp and /private/tmp on macOS)."""
+    way (/tmp and /private/tmp on macOS). A path with `..` in it is checked with links followed only: after a
+    linked folder, `..` is the folder above the link's target, which the path as written doesn't show."""
     path = Path(path).expanduser()
     root = home()
-    for full in (os.path.abspath, os.path.realpath):
+    for full in ((os.path.realpath,) if ".." in path.parts else (os.path.abspath, os.path.realpath)):
         base, inner = full(root), full(path)
         try:
             if os.path.normcase(os.path.commonpath([base, inner])) == os.path.normcase(base):
@@ -210,7 +211,7 @@ def session_path(value):
     in the current folder is looked up there, so `sessions/<name>.json` works from any folder."""
     path = Path(value).expanduser()
     if not path.is_absolute() and not path.exists() and (home() / path).exists():
-        return home() / path
+        return in_home(home() / path)   # `../x` read from the home folder is a file outside it
     return in_home(path)
 
 
@@ -1286,10 +1287,14 @@ def cmd_dossier(args):
         have = sorted(p.stem for p in (home() / "projects").glob("*.md"))
         sys.exit(f"dossier: projects/{slug}.md isn't there. "
                  + (f"There are dossiers for: {', '.join(have)}" if have else "No project has been analysed yet"))
-    if not args.sections and not args.top:
+    # --top can come anywhere after the slug. Before Python 3.12 argparse stops reading section names at an option
+    # in the middle, so the names are taken as "everything after the slug" and --top is picked out of them here.
+    sections = [s for s in args.sections if s != "--top"]
+    top = args.top or len(sections) != len(args.sections)
+    if not sections and not top:
         sys.stdout.write(text)
         return
-    part, missing = dossier_sections(text, args.sections, args.top)
+    part, missing = dossier_sections(text, sections, top)
     sys.stdout.write(part)
     for name in missing:
         warn(f"dossier: projects/{slug}.md has no \"## {name}\" section")
@@ -1980,7 +1985,7 @@ def main():
     c.set_defaults(fn=cmd_audit_merge)
     c = sub.add_parser("dossier")
     c.add_argument("slug")
-    c.add_argument("sections", nargs="*", help='the "## " headings to print, each in quotes')
+    c.add_argument("sections", nargs=argparse.REMAINDER, help='the "## " headings to print, each in quotes')
     c.add_argument("--top", action="store_true", help="also print what comes before the first heading (the frontmatter)")
     c.set_defaults(fn=cmd_dossier)
     args = p.parse_args()
