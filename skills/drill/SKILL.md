@@ -12,7 +12,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md). Read only the parts of `state-schema.md` you need, the host rules, `iv`, settings and session files: `sed -n '/^## Running in any host/,/^## Layout/p;/^## config.json/,/^### Review JSON/p' "${CLAUDE_PLUGIN_ROOT}/references/state-schema.md"`.
+1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-sessions.md` (settings and session files). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. If `HOME_DIR/topics.json` doesn't exist or has no topics, say there's nothing to drill yet and stop. Suggest `/interviewly:start` if there's no `profile.json` (it sets the user up and seeds topics from their projects), otherwise `/interviewly:interview`.
 
 ## 1. Pick the items

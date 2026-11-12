@@ -12,6 +12,7 @@ All notable changes to Interviewly. Versions follow [semantic versioning](https:
 - **What it won't do.** Type a password, get round a sign-in or security check, or touch your name, photo, contact details, settings, messages, connections, posts or anyone else's profile: the script refuses a plan that tries. LinkedIn's user agreement doesn't allow automated tools on its site, so it tells you that and asks before it starts.
 - **Lengths are counted, not guessed.** The same script checks every section against LinkedIn's limits (220 characters for a headline, 2,600 for the About, 2,000 for a role or project), shows where a search result or "see more" cuts it off, and flags Markdown that LinkedIn would show as typed.
 - **No CV yet?** A LinkedIn profile saved as a PDF now works as your starting CV in `/interviewly:start`.
+- **A quieter start.** Each command used to cut the rules it needed out of one large file with a shell command. Claude Code treats that command as an edit, so it could be refused, or stop to ask you about editing a "sensitive file". The rules are now in small files (`references/common.md` and the `references/state-*.md` files) that are read whole with the app's own file tool, and no command falls back to reading all 30 KB of them.
 - **Checks.** Four new evals cover the profile check, the rewrite, the dry run, and being asked to make the changes with no browser to drive. The export reader, the paste sheet and the plan checker have their own unit tests.
 
 ## 0.10.0 · 2026-11-10

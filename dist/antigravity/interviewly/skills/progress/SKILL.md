@@ -9,7 +9,7 @@ Give the user an honest picture of how ready they are and one clear next step.
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md). Read only the parts of `state-schema.md` you need, the host rules, `iv`, and how readiness and streaks are defined: `sed -n '/^## Running in any host/,/^## Layout/p;/^### Readiness and streaks/,$p' "${CLAUDE_PLUGIN_ROOT}/references/state-schema.md"`.
+1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-readiness.md` (how readiness and streaks are defined). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. No `profile.json`? Suggest `/interviewly:start` and stop.
 3. Run `iv stats --json`. It has `overall` (readiness over every topic in scope, with untested topics counting as 0), `mastery` (the average over the topics practised), `coverage` (`tested` of `total`), readiness and coverage per skill and project, reviews due today and this week, new topics waiting (and how many come today), the weakest topics, every session with its score, the streak, and the countdown to the active target's interview.
 4. If there's an active target, read `targets/<slug>.md` for its requirement map. If there are other targets or any debriefs, read their frontmatter and `## Rounds` too.

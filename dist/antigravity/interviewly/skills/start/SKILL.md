@@ -9,11 +9,11 @@ Get the user from nothing to useful practice with as few steps as possible: **jo
 
 Arguments (anything the user already gave you): `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
-Conventions used in every Interviewly skill (`HOME_DIR`, the helper script `iv`, asking with options) are in `${CLAUDE_PLUGIN_ROOT}/references/state-schema.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md); read that part with `sed -n '/^## Running in any host/,/^## Layout/p' "<that file>"`. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+Conventions used in every Interviewly skill (`HOME_DIR`, the helper script `iv`, asking with options) are in `${CLAUDE_PLUGIN_ROOT}/references/common.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md). Read it whole, with your file-reading tool rather than a shell command. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 
 ## Where requests go
 
-This skill often loads first, so it routes anything specific with the **Which skill** line in state-schema.md, plus: "quiz me" or resuming a mock → `interview`; a CV written from scratch → `cv new`; "what next?" → `progress`; the likely questions → the question guide below.
+This skill often loads first, so it routes anything specific with the **Which skill** line in `common.md`, plus: "quiz me" or resuming a mock → `interview`; a CV written from scratch → `cv new`; "what next?" → `progress`; the likely questions → the question guide below.
 
 Set up: run the matching skill with their words, and stop. Not set up: run prep or debrief directly (they work without a profile). For anything else, onboard first (steps 1–6), taking the request (or what another skill said the user wanted) as the answer to "How do you want to start?": a mock interview → **Practice now**, the CV → **Check my CV first**, a project → **Learn my projects first**, anything else → **Likely questions first**. Once set up, run or offer what they asked for.
 
