@@ -11,7 +11,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md). Read only the parts of `state-schema.md` you need, the host rules, the helper script `iv`, settings and session files: `sed -n '/^## Running in any host/,/^## Layout/p;/^## config.json/,/^### Review JSON/p' "${CLAUDE_PLUGIN_ROOT}/references/state-schema.md"`.
+1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-sessions.md` (settings and session files). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. **Quick mode** (the arguments include `quick`; the start skill sends this while setup runs in the background): don't wait for setup or ask for anything. Work from the CV and job description in this conversation, plus whatever already exists in `HOME_DIR`. If a project's code was given and there's no dossier yet, read its key files yourself as you go.
    Otherwise, if `HOME_DIR/profile.json` doesn't exist, run the `interviewly:start` skill instead, telling it the user wants a practice interview (and these arguments). Start gets them practising within a minute and builds the profile in the background.
 3. Read: `profile.json`, `config.json`, `projects/index.json`, `targets/<active_target>.md` if one is set, plus the mode-specific files listed in step 2. Don't read `topics.json` itself: `iv due` (step 2) gives you the topics you need, and `grep -o '"id": "[^"]*"' HOME_DIR/topics.json` lists every existing id if you want to reuse one.
@@ -68,7 +68,7 @@ Weighting:
 
 ## 3. Create the session file
 
-`HOME_DIR/sessions/<YYYY-MM-DD-HHMM>-<mode>.md` (the name from `iv stamp <mode>`) with the frontmatter from `state-schema.md`, `status: in-progress` and `plan: [<the planned topic ids, in order>]` (ids only, so a resume picks up without showing the questions). **After every user answer**, append the exchange: the question as you asked it, the user's answer word for word, follow-ups, and hint and skip counts. Use your file edit tool, never `cat >>` or a heredoc: answers are free text. Write it as you go, never only at the end.
+`HOME_DIR/sessions/<YYYY-MM-DD-HHMM>-<mode>.md` (the name from `iv stamp <mode>`) with the frontmatter from `state-sessions.md`, `status: in-progress` and `plan: [<the planned topic ids, in order>]` (ids only, so a resume picks up without showing the questions). **After every user answer**, append the exchange: the question as you asked it, the user's answer word for word, follow-ups, and hint and skip counts. Use your file edit tool, never `cat >>` or a heredoc: answers are free text. Write it as you go, never only at the end.
 
 ## 4. Run the interview
 

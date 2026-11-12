@@ -11,7 +11,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Formats: `sed -n '/^## Running in any host/,/^## Layout/p;/^## Targets/,/^## topics.json/p' "${CLAUDE_PLUGIN_ROOT}/references/state-schema.md"` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md). Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
+1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. Subcommands. `<slug>` is the name of a file in `targets/`. Given a company name, use the file it matches; given none with `date`, the active target; if nothing matches, show the list and ask.
    - `list`: show the targets in `HOME_DIR/targets/` (company, role, date) and mark the active one. Stop.
    - `use <slug>`: set `profile.active_target` to that slug. Stop.
@@ -55,7 +55,7 @@ Mark each eligibility term `meets`, `doesn't` or `ask`, from the CV or what the 
 
 Slug: `<company>-<role>`, e.g. `acme-backend-engineer`. If that file exists, ask with options: **Update it (Recommended)** · **Save a new target** (for another team, say); in quick mode, update. Updating keeps `added`, `interview_date`, the `## Rounds` section (the debrief skill writes it) and the user's logistics answers, and adds `updated: <today>`. A new target gets a suffix: `acme-backend-engineer-2`.
 
-Start with the frontmatter from `state-schema.md` (`company`, `role`, `level`, `added`, `source`, and `interview_date` from `--date` or the file you're updating). Unless the arguments include `quick`, the user said not to ask, or you already asked in step 2, ask once, in plain text, for what's still missing: the interview date and, optionally, their salary expectations, notice period and need for sponsorship. Save the date as `interview_date`; the other answers go in section 3 only (see *Targets* in state-schema.md).
+Start with the frontmatter from `state-targets.md` (`company`, `role`, `level`, `added`, `source`, and `interview_date` from `--date` or the file you're updating). Unless the arguments include `quick`, the user said not to ask, or you already asked in step 2, ask once, in plain text, for what's still missing: the interview date and, optionally, their salary expectations, notice period and need for sponsorship. Save the date as `interview_date`; the other answers go in section 3 only (see *Targets* in `state-targets.md`).
 
 1. **Fit summary:** 3–4 lines, honest. A hard blocker first (an eligibility term they don't meet), then what makes the user a fit, and the biggest risk. Job ads are wish lists: if most must-haves are strong or partial, say it's worth applying.
 2. **Requirement map:** a table of `Requirement · Must/Nice · Your evidence · Status · Prep action`.

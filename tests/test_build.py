@@ -206,6 +206,57 @@ class ManifestTest(unittest.TestCase):
         self.assertTrue((ROOT / claude["icon"]).is_file(), claude["icon"])
 
 
+class ReferencesTest(unittest.TestCase):
+    """Skills and agents read small reference files whole, with the host's file tool. Claude Code treats
+    `sed` with a pattern as an edit of the file, and refuses it (or asks the user) when the file is in the
+    plugin folder, so no skill may go back to cutting sections out with the shell."""
+
+    SKILLS = sorted((ROOT / "skills").glob("*/SKILL.md"))
+    AGENTS = sorted((ROOT / "agents").glob("*.md"))
+    REFERENCES = sorted((ROOT / "references").glob("*.md"))
+    READ_WHOLE_LIMIT = 12000   # bytes; common.md and each state file are read in one go
+    CODE = re.compile(r"```.*?```|`[^`\n]+`", re.S)
+    SHELL_READ = re.compile(r"(?:^|[;|&(]\s*|\n\s*)(?:sed|awk|grep|cat|head|tail)\s")
+    PLUGIN_PATH = re.compile(r"references/|CLAUDE_PLUGIN_ROOT|<plugin>|PLUGIN_DIR|<that file>")
+
+    def text(self, path):
+        return path.read_text(encoding="utf-8")
+
+    def name(self, path):
+        return str(path.relative_to(ROOT))
+
+    def test_every_skill_reads_the_common_rules_and_safety(self):
+        for skill in self.SKILLS:
+            text = self.text(skill)
+            for needed in ("${CLAUDE_PLUGIN_ROOT}/references/common.md", "${CLAUDE_PLUGIN_ROOT}/references/safety.md"):
+                self.assertIn(needed, text, self.name(skill))
+
+    def test_no_shell_command_reads_the_plugin_folder(self):
+        for source in self.SKILLS + self.AGENTS + self.REFERENCES:
+            for code in self.CODE.findall(self.text(source)):
+                code = code.strip("`")
+                # `sed` has no other job in a skill, so any use of it is a section being cut out
+                if code.startswith("sed ") or (self.SHELL_READ.search(code) and self.PLUGIN_PATH.search(code)):
+                    self.fail(f"{self.name(source)}: read the file whole with the file tool instead of `{code}`")
+
+    def test_named_reference_files_exist(self):
+        names = {p.name for p in self.REFERENCES}
+        for source in self.SKILLS + self.AGENTS + self.REFERENCES:
+            text = self.text(source)
+            named = set(re.findall(r"references/([a-z-]+\.md)", text))
+            named |= set(re.findall(r"`((?:common|state-[a-z]+)\.md)`", text))
+            self.assertLessEqual(named, names, self.name(source))
+
+    def test_state_files_are_indexed_and_small(self):
+        index = self.text(ROOT / "references" / "state-schema.md")
+        listed = set(re.findall(r"^\| `([a-z-]+\.md)` \|", index, re.M))
+        whole = {p.name for p in self.REFERENCES if p.name == "common.md" or p.name.startswith("state-")}
+        self.assertEqual(listed, whole - {"state-schema.md"}, "list every state file in references/state-schema.md")
+        for name in sorted(whole):
+            size = (ROOT / "references" / name).stat().st_size
+            self.assertLessEqual(size, self.READ_WHOLE_LIMIT, f"{name} is read whole: split it rather than let it grow")
+
+
 class DocsTest(unittest.TestCase):
     """Links between the Markdown docs must point at files and headings that exist."""
 

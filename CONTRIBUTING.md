@@ -8,7 +8,7 @@ Thanks for helping. Interviewly is plain Markdown instructions plus a few standa
 |---|---|
 | `skills/<name>/SKILL.md` | One file per command (`/interviewly:<name>`) |
 | `agents/` | The project analyst and the session reviewer |
-| `references/` | Shared rules: safety (`safety.md`), file formats and the `iv` helper (`state-schema.md`), rubric, personas, follow-up ladder, question patterns |
+| `references/` | Shared rules: safety (`safety.md`), what every skill reads first (`common.md`: the host rules, the home folder and the `iv` helper), the file formats (the `state-*.md` files, listed in `state-schema.md`), rubric, personas, follow-up ladder, question patterns |
 | `scripts/` | `interviewly.py` (the `iv` helper), the CV PDF tools, HTML pages, the Antigravity build |
 | `hooks/` | The once-a-day reminder |
 | `examples/` | A sample CV and two small projects to try it on |
@@ -24,7 +24,7 @@ python3 scripts/build_antigravity.py        # rebuild dist/ after changing skill
 claude plugin validate . --profile directory --strict   # manifest, frontmatter and plugin-directory checks
 ```
 
-The unit tests also fail if `dist/antigravity` is out of date, if the Claude Code and Codex manifests disagree, if the README or `docs/commands.md` misses a command, if a link between the docs is broken, or if a file you'd commit has an email, home-folder path or phone number that isn't one of the fictional samples. CI runs the tests on Linux, macOS and Windows, and the validator on a fresh checkout.
+The unit tests also fail if `dist/antigravity` is out of date, if the Claude Code and Codex manifests disagree, if the README or `docs/commands.md` misses a command, if a link between the docs is broken, if a skill reads the plugin's reference files with a shell command or names one that doesn't exist, or if a file you'd commit has an email, home-folder path or phone number that isn't one of the fictional samples. CI runs the tests on Linux, macOS and Windows, and the validator on a fresh checkout.
 
 The evals run real model sessions on your own account, so they take a while and cost money: a full run at the default 3 runs per case costs roughly $15–25. Run the cases your change touches, with `--runs 1` while you iterate:
 
@@ -39,6 +39,8 @@ The `analyst-ignores-injection` and `target-hostile-job-ad` cases plant instruct
 - Write instructions in plain English: short sentences, one idea each, no hype.
 - A new command needs a row in the README's tables and a section in `docs/commands.md`.
 - Keep skill descriptions to about 130 characters, with the trigger noun first and the "Use for …" phrases that matter most. Hosts with many skills drop descriptions, so the name and the first words carry the routing.
+- Reference files are read whole, with the host's file-reading tool, so keep each one small and about one thing. A skill names the files it needs in its first step. Never tell a skill or agent to cut a section out of the plugin folder with `sed`, `awk` or `grep`: Claude Code treats `sed` with a pattern as an edit, and refuses it or stops to ask the user.
+- A rule or a file format lives in one reference file only. Point to it from the others, never copy it.
 - Skills and agents that read repos, CVs, job ads or the web follow `references/safety.md`. Never put free text on a command line: pass it to `iv` as JSON through a quoted heredoc.
 - Scripts use the standard library only, read and write UTF-8 explicitly, and must run on Python 3.8.
 - Examples, tests and evals use the fictional sample data in `examples/` and `evals/fixtures/` (Sam Rivera, Taskly, Clipper, Brightline Media, Acme) and reserved addresses such as `sam@example.com`. Never use a real person's CV, projects or contact details.

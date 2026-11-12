@@ -14,7 +14,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 
 ## 0. Load
 
-1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md` (if that variable wasn't filled in, it's the folder two levels above this SKILL.md). Read only the parts of `state-schema.md` you need, the host rules, `iv`, debriefs and targets: `sed -n '/^## Running in any host/,/^## Layout/p;/^## Debriefs/,/^## topics.json/p' "${CLAUDE_PLUGIN_ROOT}/references/state-schema.md"`.
+1. `HOME_DIR` = output of `echo "${INTERVIEWLY_HOME:-$HOME/.interviewly}"`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. Read `profile.json`, `stories.md` and `audit.md` if they exist. Read the dossiers in step 3, for the projects the questions touched. Debriefs work without a profile too; there's just less to ground the better answers in.
 3. Work out the target: match the arguments against `targets/` (company or slug), otherwise use `profile.active_target`. Read it, plus any earlier debriefs for the same company in `debriefs/`.
 4. The arguments start with `outcome`, or the user says how it ended ("I got the offer", "they said no", "I'm through to the next round")? Go to **Outcome** at the end.
@@ -54,7 +54,7 @@ Use the usual sequence for the role (screen → technical → system design or o
 
 ## 5. Write it down
 
-1. Write `HOME_DIR/debriefs/<YYYY-MM-DD>-<target slug, or the company's slug with no target>-<round>.md` (the reminder looks for that slug) with the frontmatter from `state-schema.md` (`date` is the interview's; add `written:` with today's date, the first 10 characters of `iv stamp`; `outcome: waiting` unless they said otherwise), then: a questions table (`# · Question · Type · Score · Fix in one line`), the detail for each question, What went well, What they probed, Next round, Prep plan, Questions to ask.
+1. Write `HOME_DIR/debriefs/<YYYY-MM-DD>-<target slug, or the company's slug with no target>-<round>.md` (the reminder looks for that slug) with the frontmatter from `state-targets.md` (`date` is the interview's; add `written:` with today's date, the first 10 characters of `iv stamp`; `outcome: waiting` unless they said otherwise), then: a questions table (`# · Question · Type · Score · Fix in one line`), the detail for each question, What went well, What they probed, Next round, Prep plan, Questions to ask.
 2. Schedule every question in **one** call, so no score is lost. Pass the list as JSON through a quoted heredoc (safety rule 3; without a POSIX shell, write the JSON to a file and use `--file "<path>"`):
    ```bash
    iv score --stdin <<'IV_JSON_END'
