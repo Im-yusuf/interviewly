@@ -129,6 +129,17 @@ Checks every line of your CV against your code and rates the risk of each: what 
 
 Rewrites your CV for a job (or `general` for none) and gives you one PDF that applicant tracking systems read cleanly, plus a list of every change and why. It asks before it writes: which safer wordings to use, and what really changed because of the work in bullets that have no result. It never adds a fact you didn't give it. `new` builds a first CV from your answers and your code.
 
+### `/interviewly:linkedin`
+
+```
+/interviewly:linkedin [profile.pdf | export.zip | export folder] [target]
+/interviewly:linkedin check
+```
+
+Reviews your own LinkedIn profile against your CV and your code, then writes a new headline, About, role text, project entries and a top-five skills list for you to paste in. It finds where the profile and the CV disagree (titles, dates, numbers), which claims would be hard to defend in an interview, and what your code shows that the profile leaves out. Every section is checked against LinkedIn's length limits. `check` stops after the findings.
+
+Give it a copy of the profile: the PDF from **More → Save to PDF** on your profile page, the text pasted in, or the ZIP from **Settings & Privacy → Data privacy → Get a copy of your data**. It never signs in to LinkedIn, fetches a profile address or posts for you. From a data export it reads only the profile files, never your messages or connections.
+
 ### `/interviewly:target`
 
 ```

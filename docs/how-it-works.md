@@ -38,7 +38,9 @@ The skills are plain-language instructions (`skills/*/SKILL.md`) that your AI ap
 
 **Your CV** can be a PDF, Word (`.docx`), OpenDocument (`.odt`), RTF, Markdown or plain-text file, or pasted text. It's turned into clean Markdown with your bullets kept word for word, then split into skills and claims.
 
-**No CV yet?** Say so. Setup asks, in one message, for your education, any jobs and the contact details you'd want on a CV, and writes a short CV from your answers only. `/interviewly:cv new` later builds a full one from that, your code and your own words.
+**No CV yet?** A LinkedIn profile saved as a PDF works as one. Otherwise say so. Setup asks, in one message, for your education, any jobs and the contact details you'd want on a CV, and writes a short CV from your answers only. `/interviewly:cv new` later builds a full one from that, your code and your own words.
+
+**Your LinkedIn profile** is optional. `/interviewly:linkedin` works from a copy you give it (LinkedIn's Save to PDF, pasted text or your data export), compares it with your CV and your code, and writes new text for you to paste in. It checks each section against LinkedIn's length limits with a script, because a model's own character count can't be trusted. It never signs in to LinkedIn, and from a data export it opens only the profile files.
 
 **Your code** can come from:
 - **GitHub.** With the GitHub CLI (`gh`) signed in, it lists your repos, private ones included. Without it, it can only see public repos. It shows which repos match your CV and clones only the ones you confirm, into `~/.interviewly/repos/`. Clones use `--filter=blob:limit=1m`: the full history comes down in one go, and only files over 1 MB are left out. Only `https://` and `git@host:owner/repo` links are accepted. If a saved link has a token in it, the token is removed and you're asked to re-clone without it.
@@ -121,6 +123,7 @@ Everything Interviewly saves is plain files in `~/.interviewly` (or the folder i
 | `repos/` | Clones of the GitHub repos you chose |
 | `guides/`, `targets/`, `learning/` | Study guides, job analyses and larp-it plans |
 | `audit.md`, `audit.json`, `cv/`, `stories.md` | CV audit and its bookkeeping, rewritten CVs and your STAR stories |
+| `linkedin/` | Your LinkedIn profile as you gave it, and the suggested new text |
 | `sessions/`, `debriefs/`, `topics.json` | Practice transcripts and scores, notes from real interviews, and the review schedule |
 | `reports/` | HTML report cards, the dashboard and share images (safe to delete) |
 | `.lock`, `.nudge-shown`, `tmp/` | Housekeeping: a lock so two sessions don't overwrite each other, the reminder's once-a-day marker, short-lived files |

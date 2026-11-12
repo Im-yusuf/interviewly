@@ -1,0 +1,4 @@
+Company Name,Title,Description,Location,Started On,Finished On
+Brightline Media,Backend Engineer,"Lead engineer on the reporting platform.
+- Migrated reporting from cron scripts to Celery, cutting report delivery from 6 hours to 20 minutes
+- Maintain the Django services the content team uses",London,Jun 2024,

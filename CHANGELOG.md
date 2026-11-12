@@ -2,6 +2,14 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.11.0 · 2026-11-12
+
+- **Your LinkedIn profile.** `/interviewly:linkedin` reviews your own profile against your CV and your code. It lists where the two disagree (a title, a date, a number), which claims would be hard to defend in an interview, and what your code shows that the profile leaves out. Then it writes a new headline, About, role text, project entries and a top-five skills list for you to paste in, under the same rule as the CV rewrite: nothing invented, and safer wording only removes or softens. `check` stops after the findings.
+- **From a copy you give it.** It takes LinkedIn's Save to PDF, pasted text or your data export. It never signs in, fetches a profile address or posts. A new script reads the export and opens only the profile files: never your messages, connections or contacts, and never the date of birth or address in the profile file.
+- **Lengths are counted, not guessed.** The same script checks every section against LinkedIn's limits (220 characters for a headline, 2,600 for the About, 2,000 for a role or project), shows where a search result or "see more" cuts it off, and flags Markdown that LinkedIn would show as typed.
+- **No CV yet?** A LinkedIn profile saved as a PDF now works as your starting CV in `/interviewly:start`.
+- **Checks.** Two new evals cover the profile check and the rewrite, and the export reader has its own unit tests.
+
 ## 0.10.0 · 2026-11-10
 
 - **A health check.** `/interviewly:setup doctor` prints what a bug report needs (versions, whether your home folder is private, counts of projects and topics, whether the reminder last failed) and nothing personal: no names, paths or CV text. The bug report form asks for it.

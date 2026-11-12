@@ -87,6 +87,7 @@ The name is a joke. It will never write you a script to bluff with. It teaches y
 | **Your CV and the job** | |
 | `/interviewly:audit` | Every CV claim checked against your code, with safer wording for the risky ones |
 | `/interviewly:cv` | An honest rewrite for a job, as one PDF that applicant tracking systems read. `cv new` writes a first CV |
+| `/interviewly:linkedin` | Your LinkedIn profile checked against your CV and code, with honest text to paste in |
 | `/interviewly:target` | A job ad turned into fit, gaps, likely questions and company research |
 | `/interviewly:debrief` | After a real interview: stronger answers and what the next round will ask |
 | **Start, track and maintain** | |
@@ -139,7 +140,7 @@ Say **skip** when it asks for a job ad and pick **Check my CV first**. Once it h
 - **Take orders from a repo or a job ad.** Instructions hidden in what it reads are treated as text. No AI tool can fully rule that out, so keep your app's permission prompts on for code you didn't write.
 - **Nag.** At most one line a day, only when there's something worth practising, and you can turn it off.
 
-These are tested: [32 behaviour evals](evals/) run the skills on the sample projects, including a repo and a job ad with planted instructions, a request to inflate a CV, and interviews with known bluffs.
+These are tested: [34 behaviour evals](evals/) run the skills on the sample projects, including a repo and a job ad with planted instructions, a request to inflate a CV, and interviews with known bluffs.
 
 ## Install
 
@@ -180,13 +181,16 @@ git clone https://github.com/Im-yusuf/interviewly
 You can, and it will ask what it can guess from a pasted CV. Interviewly reads the repo first, so its questions name your functions and catch what your CV says that your code doesn't. It also remembers: weak answers come back on a schedule, and the readiness score counts what you haven't practised yet.
 
 **I don't have a CV yet.**
-Say so when it asks. It asks a few questions and writes a short CV from your answers, then `/interviewly:cv new` builds a full one from your answers and your code.
+Say so when it asks. It asks a few questions and writes a short CV from your answers, then `/interviewly:cv new` builds a full one from your answers and your code. A LinkedIn profile saved as a PDF works as a starting CV too.
 
 **I can't share my work code. Does it still help?**
 Yes. It prepares you from your CV instead, and interviews focus on what you did, how you measured it and what your part was.
 
 **Will it make my CV sound better than the truth?**
 No. Ask it to add something you haven't done and it says no, in a sentence, and offers an honest alternative. A CV you can defend line by line does better in the interview than a padded one.
+
+**Does it connect to my LinkedIn account?**
+No. `/interviewly:linkedin` works from a copy of your own profile that you give it: LinkedIn's Save to PDF, pasted text, or your data export. It never signs in, reads anyone else's profile or posts, and you paste the new text in yourself.
 
 **Which languages and frameworks?**
 Any. It reads whatever is in your repo, from React and FastAPI to Kubernetes, PyTorch and ffmpeg.

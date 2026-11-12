@@ -9,7 +9,7 @@ Thanks for helping. Interviewly is plain Markdown instructions plus a few standa
 | `skills/<name>/SKILL.md` | One file per command (`/interviewly:<name>`) |
 | `agents/` | The project analyst and the session reviewer |
 | `references/` | Shared rules: safety (`safety.md`), file formats and the `iv` helper (`state-schema.md`), rubric, personas, follow-up ladder, question patterns |
-| `scripts/` | `interviewly.py` (the `iv` helper), the CV PDF tools, HTML pages, the Antigravity build |
+| `scripts/` | `interviewly.py` (the `iv` helper), the CV PDF tools, the LinkedIn export reader, HTML pages, the Antigravity build |
 | `hooks/` | The once-a-day reminder |
 | `examples/` | A sample CV and two small projects to try it on |
 | `docs/` | The command reference, how it works, troubleshooting, and the README images |

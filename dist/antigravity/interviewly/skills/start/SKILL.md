@@ -50,7 +50,7 @@ Ask in one short message: "Now your CV: drop in the file path, or paste the text
 
 Read a file with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cv_to_text.py" "<path>"` (PDF, Word, ODT or RTF; it keeps links and bold, which plain reading loses). If it reports no text layer, or warns that the PDF is laid out in columns, read the PDF with the Read tool. `(Note:` lines and a `(From the page header…)` line come from the reader, not the CV: follow the notes and don't copy either into `cv.md`. Look for a GitHub profile link while you're at it.
 
-**No CV yet:** ask the one plain message the setup skill describes for `none` (education, any jobs or volunteering, contact details), and later pass setup `none` with the answers. Leave **Check my CV first** out of step 3.
+**No CV yet:** a LinkedIn profile saved as a PDF works as one (on a computer: their profile → **More** → **Save to PDF**), so say so in a line and read it like any PDF. With neither, ask the one plain message the setup skill describes for `none` (education, any jobs or volunteering, contact details), and later pass setup `none` with the answers. Leave **Check my CV first** out of step 3.
 
 ## 3. One prompt: how do you want to start?
 

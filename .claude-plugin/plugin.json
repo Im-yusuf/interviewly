@@ -2,7 +2,7 @@
   "name": "interviewly",
   "displayName": "Interviewly",
   "description": "Mock interviews about your own code. Interviewly reads your CV and your projects, asks the follow-ups real interviewers ask, checks every CV claim, and turns code you vibe coded into 10-minute lessons. You built it. Now explain it.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "author": {
     "name": "Im-yusuf",
     "url": "https://github.com/Im-yusuf"
@@ -15,6 +15,7 @@
     "career",
     "cv",
     "resume",
+    "linkedin",
     "ats",
     "spaced-repetition",
     "job-search",
