@@ -4,6 +4,8 @@
     linkedin_profile.py read <export.zip | export folder>    print the profile as Markdown
     linkedin_profile.py limits <suggested.md>                check each section's length
     linkedin_profile.py sheet <suggested.md> [--open]        write paste-sheet.html next to it: one copy button per field
+    linkedin_profile.py plan <plan.json>                     check a plan of profile changes and print every change in full
+    linkedin_profile.py done <plan.json> <step> <outcome>    record a step as saved, skipped or failed
 
 The export is what LinkedIn sends for "Get a copy of your data" (Settings & Privacy → Data privacy). It can
 also hold messages, connections, contacts and more. This script opens only the profile files named in CORE
@@ -13,8 +15,10 @@ message or another person's details.
 Standard library only. Nothing here opens a network connection.
 """
 import csv
+import hashlib
 import html
 import io
+import json
 import re
 import sys
 import zipfile
@@ -354,9 +358,182 @@ def paste_sheet(markdown):
             + "".join(cards) + f"</main><script>{SHEET_JS}</script></body></html>\n")
 
 
+# --- the change plan ---
+#
+# Before a skill changes anything on a profile through a browser, it writes every change to plan.json and runs
+# `plan` on it. That refuses a plan that reaches outside the profile's own sections or carries text that was never
+# length-checked, and prints each change in full. What the user approves is that printout, by its plan id.
+
+PLAN_ACTIONS = {"edit": "EDIT", "set": "SET", "add": "ADD", "reorder": "ORDER", "remove": "REMOVE"}
+PLAN_SECTIONS = ("headline", "about", "experience", "education", "projects", "skills", "certifications", "languages",
+                 "volunteering", "honors", "courses", "publications", "featured")
+WHOLE_FIELD = {"headline": LIMITS["headline"], "about": LIMITS["about"]}    # sections that are one text field
+LONG_FIELDS = ("description", "summary", "notes")                           # 2,000 characters each
+SHORT_FIELD_MAX = 300
+ASK_AGAIN_ADDS = ("experience", "education")       # a new job or degree is a claim about the user's life
+OUTCOMES = ("saved", "skipped", "failed")
+MAX_STEPS = 40
+NEVER = ("your name, photo, contact details, settings, messages, connections, posts or recommendations, "
+         "or anyone else's profile")
+
+
+def squash(text):
+    return "\n".join(line.rstrip() for line in str(text).replace("\r\n", "\n").strip().split("\n"))
+
+
+def plan_id(steps):
+    core = [{k: v for k, v in step.items() if k != "status"} for step in steps if isinstance(step, dict)]
+    return hashlib.sha256(json.dumps(core, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:6]
+
+
+def asks_again(step):
+    return step.get("do") == "remove" or (step.get("do") == "add" and step.get("section") in ASK_AGAIN_ADDS)
+
+
+def step_texts(step):
+    """[(field name, text, limit, must be in suggested.md)] for every piece of text a step would put on the profile."""
+    section, out = step.get("section"), []
+
+    def add(name, text):
+        if section in WHOLE_FIELD and step.get("do") == "edit":
+            out.append((section, text, WHOLE_FIELD[section], True))
+        elif str(name).strip().lower() in LONG_FIELDS:
+            out.append((name, text, LIMITS["experience"], True))
+        else:
+            out.append((name, text, SHORT_FIELD_MAX, False))
+
+    if step.get("do") in ("edit", "set") and isinstance(step.get("to"), str):
+        add(step.get("field") or section, step["to"])
+    if step.get("do") == "add" and isinstance(step.get("fields"), dict):
+        for name, text in step["fields"].items():
+            if isinstance(text, str):
+                add(name, text)
+    return out
+
+
+def check_plan(plan, suggested=None):
+    """Problems with a plan, as lines. `suggested` is the suggested-text file's Markdown, or None if there isn't one."""
+    steps = plan.get("steps") if isinstance(plan, dict) else None
+    if not isinstance(steps, list) or not steps:
+        return ["the plan needs a \"steps\" list with at least one change"]
+    problems = []
+    if len(steps) > MAX_STEPS:
+        problems.append(f"{len(steps)} changes is more than one plan may hold ({MAX_STEPS}): split it")
+    known = None if suggested is None else {squash(item["text"]) for item in profile_items(suggested)}
+    for n, step in enumerate(steps, 1):
+        def bad(message):
+            problems.append(f"step {n}: {message}")
+        if not isinstance(step, dict):
+            bad("isn't an object")
+            continue
+        do, section = step.get("do"), step.get("section")
+        if do not in PLAN_ACTIONS:
+            bad(f"\"do\" must be one of {', '.join(PLAN_ACTIONS)}")
+            continue
+        if section not in PLAN_SECTIONS:
+            bad(f"\"{section}\" isn't a profile section this command changes. It never changes {NEVER}.")
+            continue
+        if not str(step.get("why") or "").strip():
+            bad("needs a \"why\": every change comes with its reason")
+        if step.get("status") not in (None, *OUTCOMES):
+            bad(f"\"status\" must be one of {', '.join(OUTCOMES)}")
+        whole = section in WHOLE_FIELD
+        if whole and do != "edit":
+            bad(f"the {section} is one field: it can only be edited")
+        item = str(step.get("item") or "").strip()
+        if not whole and do != "reorder" and not item:
+            bad("needs an \"item\": which entry in the section")
+        if len(item) > 150 or "\n" in item:
+            bad("\"item\" is the entry's name: one short line")
+        if do in ("edit", "set"):
+            if not isinstance(step.get("from"), str) or not isinstance(step.get("to"), str) or not step["to"].strip():
+                bad("needs \"from\" (what it says now, \"\" if empty) and \"to\" (what it will say)")
+            elif squash(step["from"]) == squash(step["to"]):
+                bad("changes nothing: \"from\" and \"to\" are the same")
+            if not whole and not str(step.get("field") or "").strip():
+                bad("needs a \"field\": which part of the entry changes")
+        if do == "add" and section != "skills":
+            fields = step.get("fields")
+            if not isinstance(fields, dict) or not fields or not all(isinstance(v, str) and v.strip() for v in fields.values()):
+                bad("needs \"fields\": the text of each field of the new entry")
+        if do == "reorder":
+            order = step.get("to")
+            if not isinstance(order, list) or len(order) < 2 or not all(isinstance(x, str) and x.strip() for x in order) \
+                    or len(set(order)) != len(order):
+                bad("needs \"to\": the entries in their new order, each once")
+        for name, text, limit, checked in step_texts(step):
+            n_chars = length(squash(text))
+            if n_chars > limit:
+                bad(f"{name} is {n_chars} characters; the limit is {limit}")
+            if MARKS.search(text):
+                bad(f"{name} has Markdown, which LinkedIn shows as typed. Use plain text.")
+            if not checked and "\n" in text.strip():
+                bad(f"{name} is a one-line field")
+            if checked and known is None:
+                bad(f"{name}: there's no suggested.md next to the plan to take this text from")
+            elif checked and squash(text) not in known:
+                bad(f"{name}: this text isn't in suggested.md. Write it there first, so it's length-checked and on the "
+                    "paste sheet.")
+    return problems
+
+
+def render_plan(plan):
+    """Every change in a checked plan, in full, as the lines the user is shown."""
+    steps = plan["steps"]
+    left = [s for s in steps if s.get("status") is None]
+    lines = [f"Plan {plan_id(steps)}: {len(steps)} change{'s' if len(steps) != 1 else ''} to your LinkedIn profile"
+             + ("" if len(left) == len(steps) else f" ({len(left)} still to do)"), ""]
+
+    def block(label, text, pad="      "):
+        first, *rest = squash(text).split("\n") or [""]
+        lines.append(f"{pad}{label}: {first}".rstrip())
+        lines.extend(f"{pad}{' ' * (len(label) + 2)}{line}".rstrip() for line in rest)
+
+    again = []
+    for n, step in enumerate(steps, 1):
+        do, section = step["do"], step["section"]
+        where = section.capitalize()
+        if step.get("item"):
+            where += f" → {step['item']}"
+        if do in ("edit", "set") and step.get("field") and section not in WHOLE_FIELD:
+            where += f" → {step['field']}"
+        status = f"   [{step['status']}]" if step.get("status") else ""
+        if asks_again(step):
+            again.append(str(n))
+            status = "   (asks you again first)" + status
+        lines.append(f"{n:>2}. {PLAN_ACTIONS[do]:<6} {where}{status}")
+        if do in ("edit", "set"):
+            now = squash(step["from"])
+            block("now", (now[:200].rstrip() + " …" if len(now) > 200 else now) or "(empty)")
+            block("new", step["to"])
+            for _, text, limit, checked in step_texts(step):
+                if checked:
+                    lines.append(f"           ({length(squash(text))} of {limit} characters)")
+        elif do == "add":
+            for name, text in (step.get("fields") or {}).items():
+                block(str(name), text)
+        elif do == "reorder":
+            block("new", ", ".join(step["to"]))
+        block("why", step["why"])
+    lines.append("")
+    if again:
+        lines.append(f"Asked again one at a time, whatever you choose: {', '.join(again)}")
+    lines.append(f"Never part of a plan: {NEVER}.")
+    return lines
+
+
+def load_plan(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except ValueError as e:
+        fail(f"{path.name} isn't valid JSON ({e})")
+
+
 USAGE = ("usage: linkedin_profile.py read <export.zip | folder>\n"
          "       linkedin_profile.py limits <suggested.md>\n"
-         "       linkedin_profile.py sheet <suggested.md> [--open]")
+         "       linkedin_profile.py sheet <suggested.md> [--open]\n"
+         "       linkedin_profile.py plan <plan.json>\n"
+         "       linkedin_profile.py done <plan.json> <step number> <saved | skipped | failed>")
 
 
 def main():
@@ -365,7 +542,8 @@ def main():
             stream.reconfigure(encoding="utf-8", errors="replace")
     args = [a for a in sys.argv[1:] if a != "--open"]
     show = "--open" in sys.argv[1:]
-    if len(args) != 2 or args[0] not in ("read", "limits", "sheet") or (show and args[0] != "sheet"):
+    wanted = {"read": 2, "limits": 2, "sheet": 2, "plan": 2, "done": 4}
+    if not args or wanted.get(args[0]) != len(args) or (show and args[0] != "sheet"):
         sys.exit(USAGE)
     command, path = args[0], Path(args[1]).expanduser()
     if not path.exists():
@@ -375,7 +553,27 @@ def main():
             sys.stdout.write(read_profile(path))
             return
         if path.is_dir():
-            fail(f"{path.name} is a folder; give the suggested-text file")
+            fail(f"{path.name} is a folder; give the file")
+        if command in ("plan", "done"):
+            plan = load_plan(path)
+            source = path.with_name("suggested.md")
+            problems = check_plan(plan, source.read_text(encoding="utf-8") if source.is_file() else None)
+            if problems:
+                print(f"This plan can't be used yet ({len(problems)} to fix):")
+                print("\n".join(f"!  {line}" for line in problems))
+                sys.exit(1)
+            if command == "done":
+                steps = plan["steps"]
+                if not args[2].isdigit() or not 1 <= int(args[2]) <= len(steps) or args[3] not in OUTCOMES:
+                    fail(f"give a step from 1 to {len(steps)} and one of: {', '.join(OUTCOMES)}")
+                steps[int(args[2]) - 1]["status"] = args[3]
+                with open(path, "w", encoding="utf-8", newline="\n") as file:
+                    file.write(json.dumps(plan, indent=2, ensure_ascii=False) + "\n")
+                left = sum(1 for step in steps if step.get("status") is None)
+                print(f"Plan {plan_id(steps)}: step {args[2]} {args[3]}, {left} still to do")
+                return
+            print("\n".join(render_plan(plan)))
+            return
         markdown = path.read_text(encoding="utf-8")
         if command == "sheet":
             page = paste_sheet(markdown)

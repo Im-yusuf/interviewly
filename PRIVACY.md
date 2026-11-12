@@ -39,7 +39,7 @@ Searches and fetched links never carry your name, contact details, CV text, priv
 
 **Share images** are made only when you ask for one. They show the session type, score, label, streak and score bars, plus a project's name when GitHub says its repository is public. Never your answers or the feedback. Interviewly tells you what's in the image before you post it.
 
-**Edits to your LinkedIn profile** are made only if you ask for them, and only in a browser you're already signed in to that your AI app can drive. Interviewly shows you the list of edits first and changes nothing but your own profile. It never types a password, and it never opens your messages, your connections or anyone else's profile. LinkedIn's user agreement doesn't allow automated tools on its site, so Interviewly says so before it starts. The default is a paste sheet: a page on your machine that you copy from yourself.
+**Edits to your LinkedIn profile** are made only if you ask for them, and only in a browser you're already signed in to that your AI app can drive. That covers new text, new entries, reordering and removals. Every change is written to a plan that a script checks and prints in full, and nothing is changed until you've seen that printout and said yes. Removals and new jobs or degrees are asked about again one at a time. It changes nothing but your own profile's sections: never your name, photo, contact details or settings. It never types a password, and it never opens your messages, your connections or anyone else's profile. LinkedIn's user agreement doesn't allow automated tools on its site, so Interviewly says so before it starts. The default is a paste sheet: a page on your machine that you copy from yourself.
 
 ## Deleting your data
 

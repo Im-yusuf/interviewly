@@ -1,5 +1,6 @@
 """Tests for scripts/linkedin_profile.py: it reads only the profile files of a LinkedIn export, and it
 checks suggested profile text against LinkedIn's limits."""
+import json
 import subprocess
 import sys
 import tempfile
@@ -295,6 +296,177 @@ class SheetTest(unittest.TestCase):
             self.assertNotEqual(done.returncode, 0)
             self.assertIn("has no profile text yet", done.stderr)
             self.assertIn("usage:", run("limits", source, "--open").stderr)    # --open is for the sheet only
+
+
+HEADLINE = "Backend developer · Python, Django, FastAPI · Brightline Media"
+ABOUT = "I'm a backend developer at Brightline Media, where I look after the Django services our content team uses."
+ROLE = "- Maintain internal Django services used by the 40-person content team"
+PROJECT = "A task-management REST API built with FastAPI and SQLAlchemy."
+GOOD_STEPS = [
+    {"do": "edit", "section": "headline", "from": "Senior Backend Engineer | Kubernetes", "to": HEADLINE,
+     "why": "Your CV's title is Junior Backend Developer."},
+    {"do": "edit", "section": "about", "from": "", "to": ABOUT, "why": "The About was empty."},
+    {"do": "set", "section": "experience", "item": "Backend Engineer, Brightline Media", "field": "title",
+     "from": "Backend Engineer", "to": "Junior Backend Developer", "why": "Matches your CV."},
+    {"do": "edit", "section": "experience", "item": "Backend Engineer, Brightline Media", "field": "description",
+     "from": "Lead engineer.", "to": ROLE, "why": "Uses your CV's bullet."},
+    {"do": "add", "section": "projects", "item": "Taskly API",
+     "fields": {"name": "Taskly API", "description": PROJECT, "url": "https://github.com/samrivera-example/taskly"},
+     "why": "It's on your CV and not on the profile."},
+    {"do": "add", "section": "skills", "item": "SQLAlchemy", "why": "Your code uses it (app/models.py)."},
+    {"do": "reorder", "section": "skills", "to": ["Python", "FastAPI", "SQLAlchemy"], "why": "Best-backed first."},
+    {"do": "remove", "section": "skills", "item": "Kubernetes", "why": "Nothing backs it up."},
+]
+
+
+def steps(*changes):
+    """GOOD_STEPS with (index, key, value) changes applied; a value of None drops the key."""
+    out = json.loads(json.dumps(GOOD_STEPS))
+    for index, key, value in changes:
+        if value is None:
+            out[index].pop(key, None)
+        else:
+            out[index][key] = value
+    return {"steps": out}
+
+
+class PlanTest(unittest.TestCase):
+    def problems(self, plan, suggested=SUGGESTED):
+        return linkedin_profile.check_plan(plan, suggested)
+
+    def assert_problem(self, plan, *words, suggested=SUGGESTED):
+        found = self.problems(plan, suggested)
+        self.assertTrue(found, "expected a problem")
+        self.assertTrue(any(all(w in line for w in words) for line in found), found)
+
+    def test_a_good_plan_has_no_problems_and_prints_every_change_in_full(self):
+        plan = steps()
+        self.assertEqual(self.problems(plan), [])
+        text = "\n".join(linkedin_profile.render_plan(plan))
+        self.assertRegex(text, r"^Plan [0-9a-f]{6}: 8 changes to your LinkedIn profile\n")
+        self.assertIn(" 1. EDIT   Headline\n      now: Senior Backend Engineer | Kubernetes\n      new: " + HEADLINE
+                      + "\n           (62 of 220 characters)\n      why: Your CV's title is Junior Backend Developer.", text)
+        self.assertIn(" 2. EDIT   About\n      now: (empty)\n      new: I'm a backend developer", text)
+        self.assertIn(" 3. SET    Experience → Backend Engineer, Brightline Media → title\n      now: Backend Engineer\n"
+                      "      new: Junior Backend Developer\n", text)
+        self.assertIn(" 5. ADD    Projects → Taskly API\n      name: Taskly API\n      description: " + PROJECT
+                      + "\n      url: https://github.com/samrivera-example/taskly\n", text)
+        self.assertIn(" 6. ADD    Skills → SQLAlchemy\n      why: Your code uses it", text)
+        self.assertIn(" 7. ORDER  Skills\n      new: Python, FastAPI, SQLAlchemy\n", text)
+        self.assertIn(" 8. REMOVE Skills → Kubernetes   (asks you again first)\n", text)
+        self.assertIn("Asked again one at a time, whatever you choose: 8\n", text)
+        self.assertIn("Never part of a plan: your name, photo, contact details, settings, messages", text)
+
+    def test_long_text_is_shown_whole_when_new_and_cut_when_old(self):
+        old = "x" * 250
+        text = "\n".join(linkedin_profile.render_plan(steps((1, "from", old))))
+        self.assertIn("now: " + "x" * 200 + " …", text)
+        self.assertNotIn("x" * 201, text)
+        self.assertIn("new: " + ABOUT, text)
+
+    def test_a_new_job_or_degree_asks_again_like_a_removal(self):
+        plan = steps((5, "section", "education"), (5, "item", "BSc Computer Science, Northbridge University"),
+                     (5, "fields", {"school": "Northbridge University", "degree": "BSc Computer Science"}))
+        self.assertEqual(self.problems(plan), [])
+        text = "\n".join(linkedin_profile.render_plan(plan))
+        self.assertIn(" 6. ADD    Education → BSc Computer Science, Northbridge University   (asks you again first)", text)
+        self.assertIn("whatever you choose: 6, 8", text)
+
+    def test_nothing_outside_the_profiles_own_sections(self):
+        for section in ("contact", "name", "photo", "settings", "messages", "connections", "posts", "open to work", None):
+            self.assert_problem(steps((0, "section", section)), "step 1", "never changes")
+
+    def test_only_known_actions(self):
+        for action in ("delete-account", "send", "message", "", None):
+            self.assert_problem(steps((7, "do", action)), "step 8", "\"do\" must be one of")
+
+    def test_profile_text_must_come_from_the_checked_file(self):
+        self.assert_problem(steps((0, "to", "Senior Staff Engineer | 10 years")), "step 1", "isn't in suggested.md")
+        self.assert_problem(steps((3, "to", "- Led a team of 12")), "step 4", "description", "isn't in suggested.md")
+        self.assert_problem(steps((4, "fields", {"name": "Taskly API", "description": "The best API ever."})),
+                            "step 5", "isn't in suggested.md")
+        self.assert_problem(steps(), "step 1", "no suggested.md", suggested=None)
+
+    def test_text_over_a_limit_or_with_markdown_is_refused(self):
+        long_headline = "x" * 230
+        self.assert_problem(steps((0, "to", long_headline)), "step 1", "230 characters; the limit is 220",
+                            suggested="## Headline\n" + long_headline + "\n")
+        self.assert_problem(steps((2, "to", "**Junior** Backend Developer")), "step 3", "Markdown")
+        self.assert_problem(steps((2, "to", "Junior\nBackend Developer")), "step 3", "one-line field")
+        self.assert_problem(steps((2, "to", "x" * 301)), "step 3", "the limit is 300")
+
+    def test_every_change_needs_its_reason_and_its_target(self):
+        self.assert_problem(steps((0, "why", " ")), "step 1", "needs a \"why\"")
+        self.assert_problem(steps((2, "item", None)), "step 3", "needs an \"item\"")
+        self.assert_problem(steps((2, "field", None)), "step 3", "needs a \"field\"")
+        self.assert_problem(steps((2, "from", None)), "step 3", "needs \"from\"")
+        self.assert_problem(steps((4, "fields", {})), "step 5", "needs \"fields\"")
+        self.assert_problem(steps((7, "item", "x" * 151)), "step 8", "one short line")
+
+    def test_changes_that_change_nothing_or_dont_fit_the_section(self):
+        self.assert_problem(steps((2, "to", "Backend Engineer")), "step 3", "changes nothing")
+        self.assert_problem(steps((0, "do", "remove")), "step 1", "can only be edited")
+        self.assert_problem(steps((6, "to", ["Python", "Python"])), "step 7", "each once")
+        self.assert_problem(steps((6, "to", ["Python"])), "step 7", "new order")
+
+    def test_an_empty_or_oversized_plan(self):
+        self.assert_problem({"steps": []}, "at least one change")
+        self.assert_problem({}, "at least one change")
+        self.assert_problem([], "at least one change")
+        many = {"steps": [dict(GOOD_STEPS[5], item=f"Skill {i}") for i in range(linkedin_profile.MAX_STEPS + 1)]}
+        self.assert_problem(many, "more than one plan may hold")
+
+    def test_the_plan_id_follows_the_changes_not_the_progress(self):
+        first = linkedin_profile.plan_id(steps()["steps"])
+        self.assertEqual(first, linkedin_profile.plan_id(steps((0, "status", "saved"))["steps"]))
+        self.assertNotEqual(first, linkedin_profile.plan_id(steps((2, "to", "Backend Developer"))["steps"]))
+        self.assertNotEqual(first, linkedin_profile.plan_id(steps()["steps"][:-1]))
+
+    def test_command_line_checks_prints_and_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "suggested.md").write_text(SUGGESTED, encoding="utf-8")
+            path = Path(tmp) / "plan.json"
+            path.write_text(json.dumps(steps()), encoding="utf-8")
+            done = run("plan", path)
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            self.assertIn("8 changes to your LinkedIn profile", done.stdout)
+            self.assertNotIn("still to do", done.stdout)
+            plan_id = done.stdout.split(":")[0]
+
+            done = run("done", path, "1", "saved")
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(done.stdout.strip(), f"{plan_id}: step 1 saved, 7 still to do")
+            run("done", path, "8", "skipped")
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["steps"][7]["status"], "skipped")
+            shown = run("plan", path).stdout
+            self.assertIn(f"{plan_id}: 8 changes to your LinkedIn profile (6 still to do)", shown)
+            self.assertIn(" 1. EDIT   Headline   [saved]", shown)
+            self.assertIn(" 8. REMOVE Skills → Kubernetes   (asks you again first)   [skipped]", shown)
+
+            for bad in (("done", path, "9", "saved"), ("done", path, "0", "saved"), ("done", path, "1", "published"),
+                        ("done", path, "one", "saved")):
+                refused = run(*bad)
+                self.assertNotEqual(refused.returncode, 0, bad)
+                self.assertIn("give a step from 1 to 8", refused.stderr)
+            self.assertIn("usage:", run("done", path, "1").stderr)
+
+    def test_command_line_refuses_a_bad_plan_and_wont_record_against_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "suggested.md").write_text(SUGGESTED, encoding="utf-8")
+            path = Path(tmp) / "plan.json"
+            path.write_text(json.dumps(steps((0, "section", "messages"))), encoding="utf-8")
+            for command in (("plan", path), ("done", path, "1", "saved")):
+                done = run(*command)
+                self.assertEqual(done.returncode, 1)
+                self.assertIn("This plan can't be used yet (1 to fix):", done.stdout)
+                self.assertIn("!  step 1:", done.stdout)
+                self.assertNotIn("EDIT", done.stdout)
+            self.assertNotIn("status", path.read_text(encoding="utf-8"))
+            path.write_text("{not json", encoding="utf-8")
+            done = run("plan", path)
+            self.assertNotEqual(done.returncode, 0)
+            self.assertIn("isn't valid JSON", done.stderr)
+            self.assertNotIn("Traceback", done.stderr)
 
 
 if __name__ == "__main__":

@@ -134,6 +134,7 @@ Rewrites your CV for a job (or `general` for none) and gives you one PDF that ap
 ```
 /interviewly:linkedin [profile.pdf | export.zip | export folder] [target]
 /interviewly:linkedin check
+/interviewly:linkedin plan
 /interviewly:linkedin apply
 ```
 
@@ -141,7 +142,11 @@ Reviews your own LinkedIn profile against your CV and your code, then writes a n
 
 Give it a copy of the profile: the PDF from **More → Save to PDF** on your profile page, the text pasted in, or the ZIP from **Settings & Privacy → Data privacy → Get a copy of your data**. From a data export it reads only the profile files, never your messages or connections.
 
-Putting the text in: it builds a paste sheet, a page on your machine with one box per field, a copy button, where the field is on LinkedIn and its length. `apply` goes further when your app can drive a browser you're already signed in to (Claude in Chrome in Claude Code: turn it on with `/chrome`). It shows you the list of edits, then makes them one field at a time while you watch, and checks each one after saving. It never types your password, deals with a sign-in or security check, or touches messages, connections, posts or anyone else's profile. LinkedIn's user agreement doesn't allow automated tools on its site, so it says so and asks first; the paste sheet does the same job by hand.
+Putting the text in: it builds a paste sheet, a page on your machine with one box per field, a copy button, where the field is on LinkedIn and its length. `apply` goes further when your app can drive a browser you're already signed in to (Claude in Chrome in Claude Code: turn it on with `/chrome`). It can change text, fix titles and dates, add what's missing (a project, a skill, a role or degree from your CV), reorder skills and remove what you agreed to drop.
+
+You always see the changes first. Every change is a step in a plan that a script checks and prints in full: what the field says now, what it will say, and why. `plan` shows that printout and stops, as a dry run. `apply` shows it and waits for your yes (all of them, one by one, or only some), says each step again just before it makes it, and asks again for every removal and every new job or degree. It checks the page still says what the plan expects before it overwrites anything, leaves "Notify network" off, and marks each step saved, skipped or failed.
+
+It never types your password, deals with a sign-in or security check for you, or touches your name, photo, contact details, settings, messages, connections, posts or anyone else's profile. LinkedIn's user agreement doesn't allow automated tools on its site, so it says so and asks first; the paste sheet covers the text changes by hand.
 
 ### `/interviewly:target`
 

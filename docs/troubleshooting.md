@@ -32,7 +32,7 @@ It warns when a PDF is laid out in columns and checks the order by eye. If your 
 It's under **More** (or **Resources**) on your own profile page, on a computer only: the mobile app doesn't have it, and LinkedIn makes the PDF only for profiles in English. Paste the text of your profile instead, or use the data export: **Settings & Privacy → Data privacy → Get a copy of your data**, with only the profile parts ticked.
 
 **It won't make the LinkedIn edits in my browser.**
-That needs a browser your AI app can drive and that you're already signed in to LinkedIn in. In Claude Code, run `/chrome` (or start with `claude --chrome`) with the Claude in Chrome extension installed, then `/interviewly:linkedin apply`. If LinkedIn shows a sign-in page or a security check, do that part yourself and say when you're done. Anywhere else, open the paste sheet and copy each box across.
+That needs a browser your AI app can drive and that you're already signed in to LinkedIn in. In Claude Code, run `/chrome` (or start with `claude --chrome`) with the Claude in Chrome extension installed, then `/interviewly:linkedin apply`. If LinkedIn shows a sign-in page or a security check, do that part yourself and say when you're done. Anywhere else, open the paste sheet and copy each box across. `/interviewly:linkedin plan` shows every change it would make, without making any.
 
 **The CV PDF won't build.**
 The built-in PDF writer handles Latin scripts. For right-to-left or joined scripts (Arabic, Hebrew, Hindi) and unusual characters it needs Chrome, Chromium, Edge or Brave. Install one, or point `INTERVIEWLY_BROWSER` at the browser you have.
