@@ -136,7 +136,7 @@ Say **skip** when it asks for a job ad and pick **Check my CV first**. Once it h
 - **Make things up about you.** Every model answer and CV line comes from your code, your CV or what you told it. Where a fact is missing it leaves a gap for you to fill, like `[how you measured it]`. Suggested wording makes a claim easier to defend, never bigger.
 - **Let a confident wrong answer score well.** A separate reviewer marks each interview, and an answer your code contradicts scores 2 out of 4 at most, however well it's put.
 - **Touch your code.** It reads your projects. It doesn't edit, build or run them unless you say so.
-- **Send your data anywhere.** There is no server, no account and no tracking. Your CV and code are read by the AI app you already use, and everything Interviewly saves is plain files in one private folder on your machine. Web searches carry only a company, a role or a technology. [PRIVACY.md](PRIVACY.md) lists everything it reads, runs and sends.
+- **Send your data anywhere.** There is no server, no account and no tracking. Your CV and code are read by the AI app you already use, and everything Interviewly saves is plain files in one private folder on your machine. Web searches carry only a company, a role or a technology. Text goes to LinkedIn only if you ask it to edit your profile, and only after you've seen every change. [PRIVACY.md](PRIVACY.md) lists everything it reads, runs and sends.
 - **Take orders from a repo or a job ad.** Instructions hidden in what it reads are treated as text. No AI tool can fully rule that out, so keep your app's permission prompts on for code you didn't write.
 - **Nag.** At most one line a day, only when there's something worth practising, and you can turn it off.
 

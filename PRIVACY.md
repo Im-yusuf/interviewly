@@ -7,15 +7,16 @@ Interviewly has no server, no account and no telemetry. It is a set of instructi
 - **Your CV:** the file or text you give it.
 - **Your code:** the folders you point it at and the GitHub repos you confirm, including their git history. It never opens `.env` files, private keys or other credential files, and if it meets a secret anyway it writes `[redacted]`.
 - **Job ads** you paste or link.
-- **Your LinkedIn profile,** only if you give `/interviewly:linkedin` a copy of it: the PDF LinkedIn makes, pasted text, or your data export. From an export it opens only the profile files (Profile, Positions, Education, Skills, Projects and the like). It never opens your messages, connections or contacts, and it skips the date of birth and address in the profile file. It never fetches a profile page with a web tool, and it never signs in for you.
+- **Your LinkedIn profile,** only if you give `/interviewly:linkedin` a copy of it (the PDF LinkedIn makes, pasted text, or your data export) or ask it to read the profile in a browser you're already signed in to. From an export it opens only the profile files (Profile, Positions, Education, Skills, Projects and the like). It never opens your messages, connections or contacts, and it skips the date of birth and address in the profile file. It never fetches a profile page with a web tool, and it never signs in for you.
 
 Your CV and code are read by the AI model your app uses (Claude in Claude Code, OpenAI's models in Codex, Gemini in Antigravity), as in any session in that app. The app keeps its own conversation history, so what you paste stays there too.
 
 ## What it runs
 
-- **Its own scripts,** all in [`scripts/`](scripts/): standard-library Python with no network code. They keep the practice schedule, read your CV or a LinkedIn export, build and check the CV PDF, and read git history.
+- **Its own scripts,** all in [`scripts/`](scripts/): standard-library Python with no network code. They keep the practice schedule, read your CV or a LinkedIn export, check new LinkedIn text and the plan of profile changes, build and check the CV PDF, and read git history.
 - **git,** read-only, on your projects (`git log`, `git show`, `git blame`), plus `git clone` and `git pull` for the copies it keeps of repos you confirmed.
 - **A headless browser** (Chrome, Chromium, Edge or Brave), only to make a share image, or a CV PDF in a script its own PDF writer can't set. The pages it renders are local files.
+- **Your own browser,** through your app's browser tool (such as Claude in Chrome), only when you ask `/interviewly:linkedin` to read or change your LinkedIn profile there. [What leaves your machine](#what-leaves-your-machine) says how changes are made.
 - **PDF readers already on your machine** (macOS PDFKit, `pdftotext`), only to check that a CV PDF it built reads the same in each of them.
 - **One hook.** When a session starts, [`hooks/nudge.sh`](hooks/nudge.sh) runs `scripts/interviewly.py nudge`. It reads your practice schedule and prints at most one line a day. It does nothing until you've set Interviewly up, never uses the network, and its line is shown to you without being added to the model's context. Hooks run without asking the model first, which is why this one is small and does only that. `/interviewly:setup reminder off` turns it off.
 
@@ -36,6 +37,7 @@ Apart from what your AI app sends to its model, Interviewly uses the network onl
 - fetching a job-ad link you give it
 - company research when you give it a job ad, `/interviewly:start` included. It tells you first and searches only for the company name, the role and the job's location. Say "no research" (or pass `--no-research` to `/interviewly:target`) to skip it
 - checking a technology's recent changes in `/interviewly:prep`, searching only for the technology
+- reading or changing your own LinkedIn profile in your browser, only when you ask (below)
 
 Searches and fetched links never carry your name, contact details, CV text, private repository names or code.
 

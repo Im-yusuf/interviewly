@@ -7,7 +7,7 @@ Commands are written as Claude Code and Antigravity show them. In Codex, use `$`
 - [Start](#start)
 - [Practise](#practise): [interview](#interviewlyinterview) · [drill](#interviewlydrill) · [walkthrough](#interviewlywalkthrough) · [stories](#interviewlystories)
 - [Learn your own code](#learn-your-own-code): [larp-it](#interviewlylarp-it) · [breakdown](#interviewlybreakdown) · [prep](#interviewlyprep)
-- [Your CV and the job](#your-cv-and-the-job): [audit](#interviewlyaudit) · [cv](#interviewlycv) · [target](#interviewlytarget) · [debrief](#interviewlydebrief)
+- [Your CV and the job](#your-cv-and-the-job): [audit](#interviewlyaudit) · [cv](#interviewlycv) · [linkedin](#interviewlylinkedin) · [target](#interviewlytarget) · [debrief](#interviewlydebrief)
 - [Track and maintain](#track-and-maintain): [progress](#interviewlyprogress) · [setup](#interviewlysetup)
 
 ## Start

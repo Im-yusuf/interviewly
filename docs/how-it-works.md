@@ -23,7 +23,7 @@ repos ──► project-analyst agents (one per repo) ──► dossiers
                     │   (architecture, decisions, weak spots, probe points,
                     │    CV claims vs code, who wrote what, explain-risk)
                     ▼
-   interview · walkthrough · larp-it · breakdown · prep · audit · cv · target · stories · drill · debrief
+   interview · walkthrough · larp-it · breakdown · prep · audit · cv · linkedin · target · stories · drill · debrief
                     │
                     ▼
    session-reviewer agent ──► review JSON ──► interviewly.py ──► topics.json (spaced repetition)
@@ -136,6 +136,7 @@ The folder is private: Interviewly creates it so only you can open it (mode 700 
 - fetching a job-ad link you give it
 - company research when you give it a job ad, `/interviewly:start` included. It says so first; say "no research" (or pass `--no-research` to `/interviewly:target`) to skip it
 - checking a technology's recent changes in `/interviewly:prep`
+- reading or changing your own LinkedIn profile, only when you ask `/interviewly:linkedin` to do it in a browser you're already signed in to, through your app. Changes are made only after you've said yes to the full list of them. Otherwise you copy the new text across yourself from the paste sheet
 
 Searches carry only a company name, a role, a job's location or a technology name, and neither searches nor fetched links ever carry your name, contact details, CV text, private repo names or code.
 
@@ -173,6 +174,7 @@ The skills are the same in all three apps. The differences:
 
 - **Codex** writes commands with `$` (`$interviewly:drill`), asks with numbered options outside Plan mode, and needs you to approve the reminder once in `/hooks`.
 - **Antigravity** shows the reminder in the start skill's "welcome back" line instead of at session start. Interviewly's agents there follow your own terminal approval setting; none is set to run commands by itself.
+- **Changing your LinkedIn profile for you** (`/interviewly:linkedin apply`) needs a browser the app can drive: Claude in Chrome in Claude Code (turn it on with `/chrome`), or the app's own browser tool where it has one. Without one you get the paste sheet, which works in every app.
 - **claude.ai and the Codex IDE extension** can't load plugins that read local code, so they aren't supported.
 
 ## Updating and removing
@@ -188,5 +190,5 @@ Removing the plugin keeps your data in `~/.interviewly` until you [delete it](#d
 ## Requirements
 
 - **Python 3.8+** and **git**
-- **Optional:** the GitHub CLI (`gh`) for private repos, and Chrome, Chromium, Edge or Brave for CVs in right-to-left scripts or with characters the built-in writer's font lacks
+- **Optional:** the GitHub CLI (`gh`) for private repos; Chrome, Chromium, Edge or Brave for CVs in right-to-left scripts or with characters the built-in writer's font lacks; and a browser your app can drive, such as Claude in Chrome, for `/interviewly:linkedin apply`
 - Tested on macOS and Linux. On Windows, CI runs the unit tests, but the skills haven't been tried end to end there yet.
