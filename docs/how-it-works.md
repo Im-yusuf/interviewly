@@ -191,4 +191,4 @@ Removing the plugin keeps your data in `~/.interviewly` until you [delete it](#d
 
 - **Python 3.8+** and **git**
 - **Optional:** the GitHub CLI (`gh`) for private repos; Chrome, Chromium, Edge or Brave for CVs in right-to-left scripts or with characters the built-in writer's font lacks; and a browser your app can drive, such as Claude in Chrome, for `/interviewly:linkedin apply`
-- Tested on macOS and Linux. On Windows, CI runs the unit tests, but the skills haven't been tried end to end there yet.
+- **macOS, Linux and Windows.** CI runs the test suite on all three for every change, on Python 3.8 to 3.14

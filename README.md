@@ -12,6 +12,13 @@
 <p align="center">
   <a href="https://github.com/Im-yusuf/interviewly/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/Im-yusuf/interviewly/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-informational"></a>
+  <a href="#install"><img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude%20Code-plugin-D97757"></a>
+  <a href="#install"><img alt="Codex plugin" src="https://img.shields.io/badge/Codex-plugin-111111"></a>
+  <a href="#install"><img alt="Antigravity plugin" src="https://img.shields.io/badge/Antigravity-plugin-4285F4"></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> · <a href="#what-you-get">What you get</a> · <a href="#see-it-catch-a-bluff">See it catch a bluff</a> · <a href="docs/commands.md">Commands</a> · <a href="#faq">FAQ</a>
 </p>
 
 In Claude Code:
@@ -22,7 +29,7 @@ In Claude Code:
 /interviewly:start
 ```
 
-Paste a job ad, give it your CV, and your likely questions arrive in about a minute. [Codex, Antigravity and requirements](#install) are further down.
+Paste a job ad, give it your CV, and your likely questions arrive in about a minute. It's free, there's no account, and everything it saves stays on your machine. [Codex and Antigravity](#install) are further down.
 
 <p align="center">
   <img src="docs/demo.png" width="100%" alt="Rendered from real output on the sample project: a mock interview about an ffmpeg tool. The interviewer follows up on why -ss comes before -i with -c copy; the candidate bluffs about hardware encoding; the report card scores 2.0 out of 4, flags that hardware encoding isn't in the code (clipper.py:50-53), gives a model answer, and schedules the topic for review in 2 days.">
@@ -47,6 +54,15 @@ It's for you if you're:
 - **A student, junior or career changer** whose CV is mostly side projects, or who doesn't have a CV yet
 - **Anyone** with a line on their CV they're not sure they could defend
 
+## What you get
+
+- **Mock interviews on your own code.** One question at a time, follow-ups that dig into what you just said, and a report card from a separate reviewer, so a friendly interviewer can't inflate your score. Six styles, from a project deep-dive to system design, and five interviewers, from a friendly recruiter to a sceptical bar-raiser.
+- **A CV you can defend line by line.** Every claim is checked against your code. Risky lines get the questions an interviewer will ask and a safer wording, and `/interviewly:cv` turns the result into an honest PDF that applicant tracking systems read cleanly.
+- **A LinkedIn profile that matches your CV.** It finds the titles, dates and numbers that disagree, writes new text within LinkedIn's limits, and gives you a copy button for each field. Or it makes the edits for you, after you've seen every one.
+- **Practice aimed at one job.** Paste a job ad and get your fit, your gaps, how the company interviews and the questions to expect. From then on your practice focuses on that job and works back from the interview date.
+- **Five minutes a day that sticks.** Drills bring back what you got wrong, on a schedule, until you get it right. Readiness counts what you haven't practised yet, so it can't flatter you, and a share image shows your score and streak without your answers.
+- **Lessons for code you didn't write by hand.** [`/interviewly:larp-it`](#vibe-coded-it-larp-it-till-you-make-it) walks you through it, riskiest part first.
+
 ## How it works
 
 1. **Give it your CV and the job ad.** PDF, Word or Markdown. Paste the ad or a link, or skip it.
@@ -70,32 +86,6 @@ You shipped it with Claude, Cursor or Copilot. It works, it's on your CV, and yo
 - **Own the AI question.** "How did you use AI on this?" is a standard question now. Have a true, confident answer ready: what you decided, what you rejected, what you caught.
 
 The name is a joke. It will never write you a script to bluff with. It teaches you the code until you don't need one.
-
-## What you can do
-
-| Command | What it does |
-|---|---|
-| **Practise** | |
-| `/interviewly:interview` | A mock interview: one question at a time, real follow-ups, then a report card from a separate reviewer |
-| `/interviewly:drill` | Five minutes a day: the reviews you owe, plus a few new topics |
-| `/interviewly:walkthrough` | "Walk us through a project" and "tell me about yourself", timed, followed up and retried |
-| `/interviewly:stories` | True STAR stories for behavioral questions, including "how I used AI" |
-| **Learn your own code** | |
-| `/interviewly:larp-it` | Code you can't explain yet, in 10-minute lessons |
-| `/interviewly:breakdown` | A written study guide to one project, with three pitches and its weak spots |
-| `/interviewly:prep` | The questions asked about one technology, tied to how you used it |
-| **Your CV and the job** | |
-| `/interviewly:audit` | Every CV claim checked against your code, with safer wording for the risky ones |
-| `/interviewly:cv` | An honest rewrite for a job, as one PDF that applicant tracking systems read. `cv new` writes a first CV |
-| `/interviewly:linkedin` | Your LinkedIn profile checked against your CV and code, rewritten honestly, and put in for you or pasted from a one-click sheet |
-| `/interviewly:target` | A job ad turned into fit, gaps, likely questions and company research |
-| `/interviewly:debrief` | After a real interview: stronger answers and what the next round will ask |
-| **Start, track and maintain** | |
-| `/interviewly:start` | Start here: job ad, CV, then likely questions or practice |
-| `/interviewly:progress` | Readiness, streak and the one thing to do next |
-| `/interviewly:setup` | Add a project, update your CV, turn the reminder off, or run a health check |
-
-Interviews come in six styles (project deep-dive, tech fundamentals, behavioral, system design, CV claims, mixed) with five interviewers, from a friendly recruiter to a sceptical bar-raiser. [All commands and options](docs/commands.md) has every argument.
 
 ## See it catch a bluff
 
@@ -142,6 +132,32 @@ Say **skip** when it asks for a job ad and pick **Check my CV first**. Once it h
 
 These are tested: [36 behaviour evals](evals/) run the skills on the sample projects, including a repo and a job ad with planted instructions, a request to inflate a CV, and interviews with known bluffs.
 
+## All commands
+
+You never have to type these, but they're there when you want one exact thing. [The command reference](docs/commands.md) has every argument.
+
+| Command | What it does |
+|---|---|
+| **Practise** | |
+| `/interviewly:interview` | A mock interview: one question at a time, real follow-ups, then a report card from a separate reviewer |
+| `/interviewly:drill` | Five minutes a day: the reviews you owe, plus a few new topics |
+| `/interviewly:walkthrough` | "Walk us through a project" and "tell me about yourself", timed, followed up and retried |
+| `/interviewly:stories` | True STAR stories for behavioral questions, including "how I used AI" |
+| **Learn your own code** | |
+| `/interviewly:larp-it` | Code you can't explain yet, in 10-minute lessons |
+| `/interviewly:breakdown` | A written study guide to one project, with three pitches and its weak spots |
+| `/interviewly:prep` | The questions asked about one technology, tied to how you used it |
+| **Your CV and the job** | |
+| `/interviewly:audit` | Every CV claim checked against your code, with safer wording for the risky ones |
+| `/interviewly:cv` | An honest rewrite for a job, as one PDF that applicant tracking systems read. `cv new` writes a first CV |
+| `/interviewly:linkedin` | Your LinkedIn profile checked against your CV and code, rewritten honestly, and put in for you or pasted from a one-click sheet |
+| `/interviewly:target` | A job ad turned into fit, gaps, likely questions and company research |
+| `/interviewly:debrief` | After a real interview: stronger answers and what the next round will ask |
+| **Start, track and maintain** | |
+| `/interviewly:start` | Start here: job ad, CV, then likely questions or practice |
+| `/interviewly:progress` | Readiness, streak and the one thing to do next |
+| `/interviewly:setup` | Add a project, update your CV, turn the reminder off, or run a health check |
+
 ## Install
 
 **Claude Code:**
@@ -169,7 +185,7 @@ git clone https://github.com/Im-yusuf/interviewly
 | | |
 |---|---|
 | **You need** | Python 3.8+ and git. The GitHub CLI (`gh`) helps with private repos |
-| **Works on** | macOS and Linux. On Windows the scripts pass their tests, but the full flow hasn't been tried yet |
+| **Works on** | macOS, Linux and Windows. The test suite runs on all three for every change |
 | **Cost** | Free and MIT licensed. It runs on the plan you already have, and the first setup uses the most of it, because it reads each project in full |
 | **Not supported** | claude.ai and the Codex IDE extension, which can't read local code |
 | **Update** | `/plugin marketplace update interviewly` in Claude Code. [Other apps](docs/how-it-works.md#updating-and-removing) |
