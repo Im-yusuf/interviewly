@@ -1307,6 +1307,13 @@ def cmd_stamp(args):
     print(f"{stamp}-{args.mode}" if args.mode else stamp)
 
 
+def cmd_ids(args):
+    """Every existing topic id, one per line, sorted (replaces `grep` on topics.json on every OS)."""
+    ids = sorted({t["id"] for t in usable(load_topics()["topics"]) if t.get("id")})
+    if ids:
+        print("\n".join(ids))
+
+
 def cmd_due(args):
     day = today()
     picked = pick_due(usable(load_topics()["topics"]), day, schedule_plan(day), args.limit, args.match, args.fill, args.new)
@@ -1954,6 +1961,7 @@ def main():
     c = sub.add_parser("stamp")
     c.add_argument("mode", nargs="?", help="appended to the stamp: drill, deep-dive, learn…")
     c.set_defaults(fn=cmd_stamp)
+    sub.add_parser("ids").set_defaults(fn=cmd_ids)
     d = sub.add_parser("due")
     d.add_argument("--limit", type=count_arg(1))
     d.add_argument("--match")

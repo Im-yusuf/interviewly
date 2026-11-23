@@ -305,6 +305,11 @@ class ScreenshotTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"INTERVIEWLY_BROWSER": sys.executable}):
             self.assertEqual(render.find_browser(), sys.executable)
 
+    def test_code_review_and_debug_modes_render_on_share_card(self):
+        for mode, label in (("code-review", "Code review"), ("debug", "Debug")):
+            card = render.share_card({"mode": mode, "score": 3.5, "threads": [{"n": 1, "score": 3.5}]})
+            self.assertIn(label, card)
+
     @unittest.skipUnless(render.find_browser(), "no Chrome, Chromium, Edge or Brave installed")
     def test_a_real_browser_makes_a_whole_png(self):
         result = render.screenshot(self.page, self.png, 1200, 630)

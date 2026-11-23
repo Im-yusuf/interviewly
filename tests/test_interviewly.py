@@ -266,6 +266,11 @@ class InterviewlyTest(unittest.TestCase):
         self.write("config.json", json.dumps({"nudge": False}))
         self.assertEqual(json.loads(self.run_cli("nudge", "--format", "antigravity")), {})
 
+    def test_ids_lists_existing_topic_ids_sorted_and_handles_empty_home(self):
+        self.assertEqual(self.run_cli("ids"), "")
+        self.seed("z/last", "a/first", "behavioral/conflict")
+        self.assertEqual(self.run_cli("ids").splitlines(), ["a/first", "behavioral/conflict", "z/last"])
+
     # --- incremental CV audit ---
 
     CV = """# Sam Rivera

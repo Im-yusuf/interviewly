@@ -62,4 +62,12 @@ Rate strength from 1 to 3 stars on: a clear personal action, a concrete result, 
 
 Write or update `HOME_DIR/stories.md`: a **coverage matrix** at the top (each category from `question-patterns.md` → story titles, or ⚠️ none), then the stories. Keep any `## Pitch` section as it is: the walkthrough skill writes it, and it isn't a story.
 
-In chat, show the coverage matrix and the stories you just built (the 30-second versions). Name the most important missing category, weighted by the active target (e.g. leadership for a senior role). Offer: "Want to practise these in a behavioral interview?" If yes, run the `interviewly:interview` skill with arguments `behavioral hiring-manager`.
+Seed each newly built story into the practice schedule so `/interviewly:drill` brings back 30-second story recall alongside technical topics. Check existing ids with `iv ids` first (reuse `behavioral/<primary-category>` if none exists for that category yet, otherwise `behavioral/<story-slug>`), and pass the list as JSON through a quoted heredoc (safety rule 3; without a POSIX shell, write to a file and use `--file "<path>"`):
+
+```bash
+iv seed <<'IV_JSON_END'
+[{"id": "behavioral/<category-or-slug>", "label": "<story title>", "skill": null, "project": "<project slug or null>", "question": "<primary prompt from Answers>", "answer_hint": "<core action and outcome from the 30-second version; no invented facts>"}]
+IV_JSON_END
+```
+
+In chat, show the coverage matrix and the stories you just built (the 30-second versions), and note how many were added to drills. Name the most important missing category, weighted by the active target (e.g. leadership for a senior role). Offer: "Want to practise these in a behavioral interview?" If yes, run the `interviewly:interview` skill with arguments `behavioral hiring-manager`.

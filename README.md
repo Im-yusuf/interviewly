@@ -56,7 +56,7 @@ It's for you if you're:
 
 ## What you get
 
-- **Mock interviews on your own code.** One question at a time, follow-ups that dig into what you just said, and a report card from a separate reviewer, so a friendly interviewer can't inflate your score. Six styles, from a project deep-dive to system design, and five interviewers, from a friendly recruiter to a sceptical bar-raiser.
+- **Mock interviews on your own code.** One question at a time, follow-ups that dig into what you just said, and a report card from a separate reviewer, so a friendly interviewer can't inflate your score. Eight styles — from project deep-dives, PR code reviews and live debugging to system design — and five interviewers, from a friendly recruiter to a sceptical bar-raiser.
 - **A CV you can defend line by line.** Every claim is checked against your code. Risky lines get the questions an interviewer will ask and a safer wording, and `/interviewly:cv` turns the result into an honest PDF that applicant tracking systems read cleanly.
 - **A LinkedIn profile that matches your CV.** It finds the titles, dates and numbers that disagree, writes new text within LinkedIn's limits, and gives you a copy button for each field. Or it makes the edits for you, after you've seen every one.
 - **Practice aimed at one job.** Paste a job ad and get your fit, your gaps, how the company interviews and the questions to expect. From then on your practice focuses on that job and works back from the interview date.
@@ -151,7 +151,7 @@ You never have to type these, but they're there when you want one exact thing. [
 | `/interviewly:audit` | Every CV claim checked against your code, with safer wording for the risky ones |
 | `/interviewly:cv` | An honest rewrite for a job, as one PDF that applicant tracking systems read. `cv new` writes a first CV |
 | `/interviewly:linkedin` | Your LinkedIn profile checked against your CV and code, rewritten honestly, and put in for you or pasted from a one-click sheet |
-| `/interviewly:target` | A job ad turned into fit, gaps, likely questions and company research |
+| `/interviewly:target` | A job ad turned into fit, gaps, likely questions, company research and a one-page pre-interview `brief` |
 | `/interviewly:debrief` | After a real interview: stronger answers and what the next round will ask |
 | **Start, track and maintain** | |
 | `/interviewly:start` | Start here: job ad, CV, then likely questions or practice |

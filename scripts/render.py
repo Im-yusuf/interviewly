@@ -168,7 +168,7 @@ def plural(n, word):
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
-MODES = ("deep-dive", "fundamentals", "behavioral", "system-design", "claims", "mixed", "drill", "learn", "walkthrough")
+MODES = ("deep-dive", "fundamentals", "behavioral", "system-design", "code-review", "debug", "claims", "mixed", "drill", "learn", "walkthrough")
 
 
 def mode_name(mode):

@@ -2,6 +2,14 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.12.0 · 2026-11-23
+
+- **Code-review and live-debugging interview modes.** `/interviewly:interview` now supports `code-review` (reviewing a realistic 40–80 line PR in your stack with planted bugs and trade-offs, scored on what you caught vs. missed) and `debug` (triaging a production incident or feature extension in your own repo), with dedicated rubric anchors and report-card support.
+- **Pre-interview one-page brief.** `/interviewly:target brief` compiles a scannable cheat sheet (`guides/<target>-brief.md`) for the night before or 30 minutes before a call — your 90-second pitch, top project gotchas, 3 matched STAR stories, gap watch-list, logistics and questions to ask — surfaced automatically by `/interviewly:start` and `/interviewly:progress` when an interview is 0–1 days away.
+- **Whiteboard reflection in system design.** The system-design interviewer now echoes back only what you actually stated as a short ASCII or Mermaid diagram mid-session before probing bottlenecks and failures.
+- **STAR stories in daily drills & drill-to-tutor jump.** `/interviewly:stories` now seeds built stories into spaced repetition so `/interviewly:drill` brings back 30-second recall alongside technical topics; typing `explain` on a missed code topic in a drill jumps straight into `/interviewly:larp-it` tutor mode for that file.
+- **Cross-platform topic ID lookup (`iv ids`).** Replaced `grep -o` on `topics.json` across skills, agents and references with `iv ids`, avoiding Windows `grep` dependencies and extra permission prompts in Claude Code.
+
 ## 0.11.2 · 2026-11-23
 
 - **Cross-platform installer (`install.py`).** Adds a standard-library Python installer (`python install.py antigravity`, plus `--uninstall`, `claude`, and `codex`) so Windows users can install, update and remove Interviewly for Antigravity natively from PowerShell or Command Prompt without Git Bash. `./install.sh antigravity --uninstall` now works on macOS and Linux too.

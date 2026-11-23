@@ -35,7 +35,7 @@ In one message, ask them to list **every question they remember**, in order, wit
 ## 3. Analyse
 
 For each question:
-- **Classify:** project deep-dive · fundamentals · behavioral · system design · CV claim · motivation · logistics (salary, notice period, right to work: keep their figures and status out of every `iv score` field). Give it a topic id, reusing an existing one where it fits (list them with `grep -o '"id": "[^"]*"' HOME_DIR/topics.json`), plus a `skill` and `project` (both `null` for a behavioral, motivation or logistics question: never a made-up slug).
+- **Classify:** project deep-dive · fundamentals · behavioral · system design · code review · debugging · CV claim · motivation · logistics (salary, notice period, right to work: keep their figures and status out of every `iv score` field). Give it a topic id, reusing an existing one where it fits (list them with `iv ids`), plus a `skill` and `project` (both `null` for a behavioral, motivation or logistics question: never a made-up slug).
 - **Assess** what they recall answering, from 1 to 4, using `${CLAUDE_PLUGIN_ROOT}/references/rubric.md`. Say once that this is based on their memory of the answer, which is never exact.
 - **Stronger answer:** what a 4/4 answer would have been, in the first person, 60–120 words, grounded in their code, dossiers and stories, with file references. Never make up facts about their work: leave a bracketed gap for anything you can't verify, as the rubric's **Writing feedback** describes.
 - **Likely follow-up** if it comes up again.

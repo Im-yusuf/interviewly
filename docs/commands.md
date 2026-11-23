@@ -36,7 +36,7 @@ A mock interview: one question at a time, real follow-ups, and a report card fro
 
 | Part | Choices |
 |---|---|
-| Mode | `deep-dive` (one project) · `fundamentals` (one technology) · `behavioral` · `system-design` · `claims` (your CV's riskiest lines) · `mixed` |
+| Mode | `deep-dive` (one project) · `fundamentals` (one technology) · `behavioral` · `system-design` (with a mid-session whiteboard diagram check) · `code-review` (a realistic PR with planted bugs in your stack) · `debug` (live incident or feature extension in your own repo) · `claims` (your CV's riskiest lines) · `mixed` |
 | Interviewer | `senior engineer` (default) · `bar-raiser` or `tough` · `hiring-manager` or `manager` · `recruiter` · `system-design` |
 | Level | `intern` · `junior` · `mid` · `senior` · `staff`. Without one it uses your job target's level, then your profile's |
 | `N` | How many main questions (default 5) |
@@ -62,7 +62,7 @@ Examples: `/interviewly:interview taskly deep-dive`, `/interviewly:interview fas
 /interviewly:drill new <N>
 ```
 
-Five to ten minutes of short questions: the reviews you owe first, then today's new topics. Each answer is scored on the spot and scheduled to come back. `N` sets how many questions (default 6). `new 5` changes how many new topics arrive each day (default 3).
+Five to ten minutes of short questions: the reviews you owe first, then today's new topics (including 30-second recall of your STAR stories). Each answer is scored on the spot and scheduled to come back. Type `explain` on a missed code topic to jump straight into `/interviewly:larp-it` tutor mode for that file. `N` sets how many questions (default 6). `new 5` changes how many new topics arrive each day (default 3).
 
 ### `/interviewly:walkthrough`
 
@@ -80,7 +80,7 @@ Practises "walk me through something you built": timed, followed up, scored, the
 /interviewly:stories practice
 ```
 
-Builds a bank of true STAR stories from your work by asking you a few questions about each. Categories: `challenge`, `failure`, `conflict`, `ownership`, `impact`, `learning`, `trade-off`, `leadership`, `feedback`, `motivation` and `ai-usage` (an honest answer to "how do you use AI tools?"). `practice` starts a behavioral interview on them.
+Builds a bank of true STAR stories from your work by asking you a few questions about each, and seeds them into your daily drills for 30-second recall. Categories: `challenge`, `failure`, `conflict`, `ownership`, `impact`, `learning`, `trade-off`, `leadership`, `feedback`, `motivation` and `ai-usage` (an honest answer to "how do you use AI tools?"). `practice` starts a behavioral interview on them.
 
 ## Learn your own code
 
@@ -152,13 +152,14 @@ It never types your password, deals with a sign-in or security check for you, or
 
 ```
 /interviewly:target <job ad: link, file or pasted text> [--date YYYY-MM-DD] [--no-research]
+/interviewly:target brief [target]
 /interviewly:target list
 /interviewly:target use <target>
 /interviewly:target date <target> <YYYY-MM-DD>
 /interviewly:target clear
 ```
 
-Analyses a job ad: your fit, each requirement mapped to your evidence, eligibility terms, how the company interviews, the questions to expect and a prep plan. From then on interviews, drills and readiness focus on that job. `--date` (or `date`) sets the interview date, so practice is scheduled to finish before it. `--no-research` skips the company lookup. `list`, `use` and `clear` switch between saved jobs.
+Analyses a job ad: your fit, each requirement mapped to your evidence, eligibility terms, how the company interviews, the questions to expect and a prep plan. From then on interviews, drills and readiness focus on that job. `brief` compiles a calm, one-page pre-interview cheat sheet (pitch, top project gotchas, 3 STAR stories, gap watch-list, logistics and questions to ask) from your saved files. `--date` (or `date`) sets the interview date, so practice is scheduled to finish before it. `--no-research` skips the company lookup. `list`, `use` and `clear` switch between saved jobs.
 
 ### `/interviewly:debrief`
 

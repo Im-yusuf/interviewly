@@ -1,7 +1,7 @@
 ---
 name: interview
 description: Mock interview on the user's projects and CV, one question at a time, scored. Use for "interview me", "quiz me on X" or "grill me".
-argument-hint: "[project|technology] [deep-dive|fundamentals|behavioral|system-design|claims|mixed] [persona] [level] [N] [coach|realistic] | resume | again"
+argument-hint: "[project|technology] [deep-dive|fundamentals|behavioral|system-design|code-review|debug|claims|mixed] [persona] [level] [N] [coach|realistic] | resume | again"
 allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)
 ---
 
@@ -16,15 +16,15 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-sessions.md` (settings and session files). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
 2. **Quick mode** (the arguments include `quick`; the start skill sends this while setup runs in the background): don't wait for setup or ask for anything. Work from the CV and job description in this conversation, plus whatever already exists in `HOME_DIR`. If a project's code was given and there's no dossier yet, read its key files yourself as you go.
    Otherwise, if `HOME_DIR/profile.json` doesn't exist, run the `interviewly:start` skill instead, telling it the user wants a practice interview (and these arguments). Start gets them practising within a minute and builds the profile in the background.
-3. Read: `profile.json`, `config.json`, `projects/index.json`, `targets/<active_target>.md` if one is set, plus the mode-specific files listed in step 2. Don't read `topics.json` itself: `iv due` (step 2) gives you the topics you need, and `grep -o '"id": "[^"]*"' HOME_DIR/topics.json` lists every existing id if you want to reuse one.
+3. Read: `profile.json`, `config.json`, `projects/index.json`, `targets/<active_target>.md` if one is set, plus the mode-specific files listed in step 2. Don't read `topics.json` itself: `iv due` (step 2) gives you the topics you need, and `iv ids` lists every existing id if you want to reuse one.
 4. Read `${CLAUDE_PLUGIN_ROOT}/references/personas.md` and `${CLAUDE_PLUGIN_ROOT}/references/follow-up-ladder.md`, plus `${CLAUDE_PLUGIN_ROOT}/references/rubric.md` when the feedback is coach (`each`).
-5. **Resume:** `resume` or `continue` in the arguments means a paused interview. (If the user means their résumé, the CV, run the `interviewly:audit` or `interviewly:cv` skill instead.) Find the newest interview session in `HOME_DIR/sessions/` with `status: paused` or `in-progress`: its `mode` is deep-dive, fundamentals, behavioral, system-design, claims or mixed, never a drill, lesson or walkthrough. Read it. Tell the user in one line which interview you're picking up, and leave other sessions out of it: no offer to score or review them. If its last question has no answer yet, ask that question again first, in the interviewer's voice. Then carry on with the next topic in its `plan` (plan the rest only if it has none). Don't skip a planned topic because another session covered it: the user paused this one. Skip step 1.
+5. **Resume:** `resume` or `continue` in the arguments means a paused interview. (If the user means their résumé, the CV, run the `interviewly:audit` or `interviewly:cv` skill instead.) Find the newest interview session in `HOME_DIR/sessions/` with `status: paused` or `in-progress`: its `mode` is deep-dive, fundamentals, behavioral, system-design, code-review, debug, claims or mixed, never a drill, lesson or walkthrough. Read it. Tell the user in one line which interview you're picking up, and leave other sessions out of it: no offer to score or review them. If its last question has no answer yet, ask that question again first, in the interviewer's voice. Then carry on with the next topic in its `plan` (plan the rest only if it has none). Don't skip a planned topic because another session covered it: the user paused this one. Skip step 1.
 
 ## 1. Settings
 
 Take settings from the arguments first:
 - A project or a skill, by slug or name → `focus`. Match it case-insensitively against the `slug` and `name` of each project in `projects/index.json` and each skill in `profile.json`, and use the slug from then on, in file paths, `--match` and the frontmatter ("Taskly" → `fastapi-todo`).
-- `deep-dive`, `fundamentals`, `behavioral`, `system-design`, `claims`, `mixed` → `mode`
+- `deep-dive`, `fundamentals`, `behavioral`, `system-design`, `code-review` (or `pr-review`), `debug`, `claims`, `mixed` → `mode`
 - `recruiter`, `hiring-manager` or `manager`, `senior engineer`, `bar-raiser` or `tough`, `system-design` → `persona` (`manager` = hiring-manager, `tough` = bar-raiser)
 - `intern`, `junior`, `mid`, `senior`, `staff` → `difficulty`. (`senior` alone sets the level; the senior engineer is the default persona anyway.) Without one, use the active target's `level`, mapped onto these five as `personas.md` describes, else `profile.target_level`.
 - A number → `length` (number of main questions)
@@ -38,7 +38,7 @@ Take settings from the arguments first:
 
 Only when the user gave neither a focus nor a mode, ask about what's missing in **one** call, asking with options:
 
-1. **Mode** (header "Mode"): Project deep-dive · Tech fundamentals · Behavioral · System design. Add to the question text: *(or type "mixed" or "CV claims")*. Mark Project deep-dive "(Recommended)" unless an active target or the reviews due suggest otherwise.
+1. **Mode** (header "Mode"): Project deep-dive · Tech fundamentals · Behavioral · System design. Add to the question text: *(or type "mixed", "CV claims", "code-review" or "debug")*. Mark Project deep-dive "(Recommended)" unless an active target or the reviews due suggest otherwise.
 2. **Focus** (header "Focus"): up to 4 options built from the user's projects and skills. Put first the items that matter most: the active target's requirements, then the projects or skills with the most reviews due, then `cv-only` skills. Skip this question for behavioral mode.
 3. **Interviewer** (header "Interviewer"): Senior engineer (Recommended) · Sceptical bar-raiser · Hiring manager · Friendly recruiter. For system-design mode, use the system-design persona and skip this question.
 4. **Format** (header "Format"): 5 questions, coach (feedback after each) · 5 questions, realistic (feedback at the end) · Quick 3 · Full 10. Mark "(Recommended)" on the one the feedback default picks: coach for a user's first two interviews, realistic after that.
@@ -47,14 +47,16 @@ Save the final settings to `config.json` as `last_interview`.
 
 ## 2. Plan the questions (don't show the plan)
 
-Plan `length` main questions, each with a topic id (`<project-or-skill>/<topic-slug>`) and a starting rung on the ladder. (System design is one thread, so `length` doesn't apply.) Where questions come from depends on the mode. Paths starting `references/` are in `${CLAUDE_PLUGIN_ROOT}`; everything else is in `HOME_DIR`.
+Plan `length` main questions, each with a topic id (`<project-or-skill>/<topic-slug>`) and a starting rung on the ladder. (System design, code-review and debug are each one thread, so `length` doesn't apply.) Where questions come from depends on the mode. Paths starting `references/` are in `${CLAUDE_PLUGIN_ROOT}`; everything else is in `HOME_DIR`.
 
 | Mode | Read | Questions come from |
 |---|---|---|
 | deep-dive | `projects/<focus>.md` | Its **Probe points**, **Weak spots** and **Decisions and trade-offs**, plus that project's topics from `iv due` and its CV claims |
 | fundamentals | `references/question-patterns.md`, the dossiers that use the skill | The skill's category patterns at the user's level, each followed up with "How did you use that in <project>?" |
 | behavioral | `stories.md` (if it exists), `references/question-patterns.md` (behavioral table) | Common behavioral questions; prefer categories that have a story, and include one category that doesn't |
-| system-design | the focus project's dossier | A single design prompt that grows the user's own project, scoped to their level and stack, run as one thread through the stages in `personas.md` (about 6–8 interviewer turns) |
+| system-design | the focus project's dossier | A single design prompt that grows the user's own project, scoped to their level and stack, run as one thread through the stages in `personas.md` (about 6–8 interviewer turns, including the whiteboard reflection) |
+| code-review | `projects/<focus>.md` (or main stack from `profile.json`) | A self-contained 40–80 line PR diff in the user's stack with 3–4 realistic planted bugs/risks (e.g. race condition, N+1 query, missing auth/validation, error handling — inspired by patterns in the dossier, never copying secrets). Show the numbered diff once and ask them to review it in priority order (~4–6 turns, probing missed issues and blocker-vs-nit calls). Log the diff and planted-issues key in the session file so the reviewer scores what was caught vs. missed |
+| debug | `projects/<focus>.md` (needs code; otherwise fall back to `code-review`) | A realistic production incident or feature-extension scenario in *their own repo*, grounded in a real component or weak spot from the dossier (~5–7 turns: triage/reproduce → pinpoint exact file & function → root cause → fix & trade-offs → regression test & safe rollout) |
 | claims | `audit.md` (if it exists) or `profile.claims`; the claims the calling skill names, when it names some | High-risk claims first (only the audit rates risk; without it, start with metric and leadership claims). Each thread checks one claim: what, how measured, your part, what-if |
 | mixed | the files above, with the dossiers read as below | An opener ("Tell me about yourself", topic `profile/tell-me-about-yourself`), 2 deep-dive, 1–2 fundamentals, 1 behavioral, 1 claim. That's 6 or 7: with a `length` of 5, drop the claim, then the second fundamentals |
 
@@ -81,7 +83,7 @@ For each thread:
 1. **Ask exactly one question, then end your turn and wait.** One question means one question mark: no multi-part questions, no lists, no "and also…". If you want to know two things, ask the more important one now and save the other for a follow-up.
 2. When the answer comes, log it, then choose the next move using `follow-up-ladder.md`:
    - Check the **triggers** first (vague answers, buzzwords, numbers, "we", contradictions with the code).
-   - Then climb, stay on the rung or move on, as the ladder describes. Maximum 3 follow-ups per thread (system design runs longer; see `personas.md`); the persona decides how hard to push.
+   - Then climb, stay on the rung or move on, as the ladder describes. Maximum 3 follow-ups per thread (system-design, code-review and debug run longer; see `personas.md` and step 2); the persona decides how hard to push.
 3. Stay in character:
    - Brief, neutral acknowledgements. No praise inflation, no teaching, no model answers.
    - If the user states something technically wrong, don't correct it in realistic mode: probe it ("What would happen if…?") and leave the verdict to the review.

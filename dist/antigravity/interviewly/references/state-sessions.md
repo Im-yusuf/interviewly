@@ -21,7 +21,7 @@
 - `nudge`: `false` turns off the start-of-session reminder. It's on when missing.
 - `new_per_day`: how many never-practised topics are introduced each day (default 3). `/interviewly:drill new N` sets it. Before an interview `iv` may introduce more (see `state-schedule.md`).
 - `max_interval_days`: the longest wait before a practised topic comes back (default 30).
-- `mode`: `deep-dive` | `fundamentals` | `behavioral` | `system-design` | `claims` | `mixed`. Session files can also be `drill`, `learn` (`/interviewly:larp-it`) or `walkthrough` (`/interviewly:walkthrough`, one thread with topic `<project>/walkthrough`, or `profile/tell-me-about-yourself` for `walkthrough pitch`).
+- `mode`: `deep-dive` | `fundamentals` | `behavioral` | `system-design` | `code-review` | `debug` | `claims` | `mixed`. Session files can also be `drill`, `learn` (`/interviewly:larp-it`) or `walkthrough` (`/interviewly:walkthrough`, one thread with topic `<project>/walkthrough`, or `profile/tell-me-about-yourself` for `walkthrough pitch`).
 - `persona`: `recruiter` | `hiring-manager` | `senior` | `bar-raiser` | `system-design` (see `personas.md`). As an interview argument, the senior persona is `senior engineer`: bare `senior` sets the level.
 - `difficulty`: one of the `target_level` values.
 - `feedback`: `end` (realistic: no feedback until the end) or `each` (coach: short feedback after every question).

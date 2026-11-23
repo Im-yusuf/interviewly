@@ -1,7 +1,7 @@
 ---
 name: target
-description: Job ad analysis for a set-up user (fit, gaps, eligibility, likely questions, company research). Use when they share another job ad.
-argument-hint: "<job-ad file | URL | pasted text> [quick] [--date YYYY-MM-DD] [--no-research] | list | use <slug> | clear | date <slug> <YYYY-MM-DD>"
+description: Job ad analysis and pre-interview brief (fit, gaps, eligibility, likely questions, company research). Use when they share a job ad or ask for a cheat sheet.
+argument-hint: "<job-ad file | URL | pasted text> [quick] [--date YYYY-MM-DD] [--no-research] | brief [slug] | list | use <slug> | clear | date <slug> <YYYY-MM-DD>"
 allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)
 ---
 
@@ -14,7 +14,8 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 ## 0. Load
 
 1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
-2. Subcommands. `<slug>` is the name of a file in `targets/`. Given a company name, use the file it matches; given none with `date`, the active target; if nothing matches, show the list and ask.
+2. Subcommands. `<slug>` is the name of a file in `targets/`. Given a company name, use the file it matches; given none with `date` or `brief`, the active target; if nothing matches, show the list and ask.
+   - `brief [slug]`: follow **Pre-interview brief** at the end. Stop.
    - `list`: show the targets in `HOME_DIR/targets/` (company, role, date) and mark the active one. Stop.
    - `use <slug>`: set `profile.active_target` to that slug. Stop.
    - `clear`: set `profile.active_target` to `null`. Stop.
@@ -74,3 +75,17 @@ Set `profile.active_target` to the slug, changing nothing else in `profile.json`
 ## 5. In chat
 
 In quick mode (called from the start skill), return just a three-line summary: fit (with any hard blocker), the biggest gap, and the number of predicted questions. Otherwise, show the fit summary, any eligibility term they don't meet or should prepare, three lines of company research, the requirement map, the top 5 predicted questions and the first two steps of the prep plan. Tell the user that interviews, prep and drills will now focus on this role, and that `/interviewly:target clear` turns that off. After the real interview, `/interviewly:debrief` turns what happened into next-round prep.
+
+## Pre-interview brief (`brief [slug]`)
+
+A calm, scannable one-page cheat sheet for the night before or 30 minutes before the call, built strictly from what is already in `HOME_DIR` (never invent facts, numbers or company details; keep every bracketed gap as it is).
+
+1. Read `profile.json`, `targets/<slug>.md` (if a target is named or active; otherwise make a general brief), `stories.md` (if it exists), `audit.md` (if it exists), `iv stats --json` (for the weakest topics), and the top 2–3 relevant dossiers via `iv dossier "<project-slug>" "Summary" "Weak spots" "Probe points"`.
+2. Write `HOME_DIR/guides/<slug, or "general">-brief.md`, kept concise (under about 700 words so it fits on one page):
+   - **Header:** Company · Role · Interview date · two-line company snapshot (sourced research from the target file only).
+   - **Your 90-second pitch:** from `## Pitch` in `stories.md` (or a 3-bullet outline from `cv.md` if none is saved yet, with a note to run `/interviewly:walkthrough pitch`).
+   - **Projects to lead with (2–3):** a one-line 30-second hook plus the top 2–3 technical gotchas with `path:line` references from each dossier.
+   - **Top 3 STAR stories:** title, the prompt it answers, and the 30-second version from `stories.md`, matched to the company's values and role level (if `stories.md` has no stories yet, say so in one line and suggest `/interviewly:stories`).
+   - **Watch-list:** the bridging answers for the top gaps from the target file, the weakest topics from `iv stats`, and any remaining high-risk CV claims from `audit.md`.
+   - **Logistics & questions to ask them:** saved logistics lines (with bracketed gaps for anything unsaid) and the 3 sharpest questions to ask from the target file.
+3. Show the full brief in chat and give its file path so they can keep it open beside the call.
