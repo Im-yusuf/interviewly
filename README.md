@@ -160,7 +160,7 @@ You never have to type these, but they're there when you want one exact thing. [
 
 ## Install
 
-**Claude Code:**
+**Claude Code** (macOS, Linux and Windows):
 
 ```
 /plugin marketplace add Im-yusuf/interviewly
@@ -168,19 +168,23 @@ You never have to type these, but they're there when you want one exact thing. [
 /interviewly:start
 ```
 
-**Codex** (CLI or desktop app). Run these in a terminal, then open Codex and onboarding starts by itself. Later, type `$interviewly:start` (Codex uses `$` where Claude Code uses `/`):
+On Windows, Claude Code uses Git for Windows (already required by Claude Code); make sure Python 3.8+ is on `PATH`.
+
+**Codex** (CLI or desktop app, macOS, Linux and Windows). Run these in a terminal, then open Codex and onboarding starts by itself. Later, type `$interviewly:start` inside Codex (Codex uses `$` where Claude Code uses `/`; in Windows PowerShell, wrap `'$interviewly:start'` in single quotes if passing it on the command line):
 
 ```bash
 codex plugin marketplace add Im-yusuf/interviewly
 codex plugin add interviewly@interviewly
 ```
 
-**Antigravity.** Run these in a terminal, then type `/interviewly:start` (Antigravity loads it automatically):
+**Antigravity** (macOS, Linux and Windows). Run these in a terminal, then type `/interviewly:start` (Antigravity loads it automatically):
 
 ```bash
 git clone https://github.com/Im-yusuf/interviewly
-./interviewly/install.sh antigravity
+python3 interviewly/install.py antigravity    # on Windows: python interviewly\install.py antigravity
 ```
+
+On macOS and Linux, `./interviewly/install.sh antigravity` also works.
 
 | | |
 |---|---|

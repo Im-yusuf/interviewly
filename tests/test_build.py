@@ -2,7 +2,9 @@
 the build must fail loudly rather than ship a broken bundle, and the manifests must agree."""
 import filecmp
 import json
+import os
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -71,6 +73,30 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(handlers[0]["type"], "command")
         self.assertIn("scripts/interviewly.py nudge --format antigravity", handlers[0]["command"])
         self.assertLessEqual(handlers[0]["timeout"], 10)
+
+    def test_antigravity_hook_runs_via_platform_shell(self):
+        # Runs via sh -c on Unix and cmd /c on Windows (matching Antigravity's hook runner).
+        hooks = json.loads((COMMITTED / "hooks.json").read_text(encoding="utf-8"))
+        cmd = hooks["interviewly-nudge"]["SessionStart"][0]["command"]
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, INTERVIEWLY_HOME=tmp, INTERVIEWLY_TODAY="2026-11-10")
+            # Silent without profile -> valid empty JSON object
+            res = subprocess.run(cmd, shell=True, cwd=str(COMMITTED), capture_output=True, encoding="utf-8", env=env)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(json.loads(res.stdout), {})
+            # Active profile + seeded topic -> user_markdown with empty systemMessage
+            (Path(tmp) / "profile.json").write_text("{}", encoding="utf-8")
+            seed = subprocess.run([sys.executable, str(COMMITTED / "scripts" / "interviewly.py"), "seed"],
+                                  input=json.dumps([{"id": "demo/x", "label": "X", "skill": "python", "project": "demo",
+                                                     "question": "Why?"}]),
+                                  capture_output=True, encoding="utf-8", env=env)
+            self.assertEqual(seed.returncode, 0, seed.stderr)
+            res = subprocess.run(cmd, shell=True, cwd=str(COMMITTED), capture_output=True, encoding="utf-8", env=env)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            payload = json.loads(res.stdout)
+            sys_msg = payload["injectSteps"][0]["systemMessage"]
+            self.assertEqual(sys_msg["systemMessage"], "")
+            self.assertIn("1 new topic to learn today", sys_msg["metadata"]["user_markdown"])
 
     def test_refuses_to_replace_a_folder_that_isnt_an_earlier_build(self):
         with tempfile.TemporaryDirectory() as tmp:

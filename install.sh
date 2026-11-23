@@ -20,16 +20,29 @@ sys.exit(not (isinstance(data, dict) and data.get("name") == "interviewly"))' "$
 case "${1:-}" in
   antigravity)
     command -v python3 >/dev/null 2>&1 || { echo "Interviewly needs Python 3.8 or newer, and python3 wasn't found." >&2; exit 1; }
+    plugins="${ANTIGRAVITY_PLUGINS_DIR:-$HOME/.gemini/config/plugins}"
+    case "$plugins" in "~" | "~/"*) plugins="$HOME${plugins#\~}" ;; esac   # a quoted ~ isn't expanded
+    dest="$plugins/interviewly"
+    if [ "${2:-}" = "--uninstall" ]; then
+      if [ ! -e "$dest" ]; then
+        echo "Nothing installed at $dest"
+        exit 0
+      fi
+      if ! is_interviewly "$dest"; then
+        echo "$dest exists and isn't an Interviewly install; not touching it." >&2; exit 1
+      fi
+      rm -rf "$dest"
+      echo "Removed $dest"
+      echo "Your saved data stays in ~/.interviewly until you delete it."
+      exit 0
+    fi
     bundle="$here/dist/antigravity/interviewly"
     if ! is_interviewly "$bundle"; then
       echo "No built plugin at $bundle. Run this script from a full clone: git clone https://github.com/$repo" >&2; exit 1
     fi
-    if command -v agy >/dev/null 2>&1; then
+    if command -v agy >/dev/null 2>&1 && [ -z "${ANTIGRAVITY_PLUGINS_DIR:-}" ]; then
       agy plugin install "$bundle"
     else
-      plugins="${ANTIGRAVITY_PLUGINS_DIR:-$HOME/.gemini/config/plugins}"
-      case "$plugins" in "~" | "~/"*) plugins="$HOME${plugins#\~}" ;; esac   # a quoted ~ isn't expanded
-      dest="$plugins/interviewly"
       if [ -e "$dest" ] && ! is_interviewly "$dest"; then
         echo "$dest exists and isn't an Interviewly install; not touching it." >&2; exit 1
       fi
@@ -61,6 +74,6 @@ case "${1:-}" in
     echo "Codex runs Interviewly's setup when you install it. Later, type: \$interviewly:start"
     ;;
   *)
-    echo "Usage: ./install.sh antigravity | claude | codex" >&2; exit 2
+    echo "Usage: ./install.sh antigravity [--uninstall] | claude | codex" >&2; exit 2
     ;;
 esac

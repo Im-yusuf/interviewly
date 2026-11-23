@@ -48,7 +48,13 @@ Searches and fetched links never carry your name, contact details, CV text, priv
 ## Deleting your data
 
 ```bash
+# macOS and Linux
 rm -rf ~/.interviewly
+```
+
+```powershell
+# Windows (PowerShell)
+Remove-Item -Recurse -Force "$HOME\.interviewly"
 ```
 
 That removes everything Interviewly saved. [Deleting your data](docs/how-it-works.md#deleting-your-data) covers the backups "Start over" makes, `$INTERVIEWLY_HOME`, and your AI app's own conversation history.

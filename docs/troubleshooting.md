@@ -9,13 +9,18 @@ Start with the health check. It prints versions and counts only (no names, paths
 ## Installing and updating
 
 **The `/interviewly:` commands don't show up.**
-Run `/plugin` in Claude Code and check Interviewly is installed and enabled, then `/reload-plugins` or start a new session. In Codex the commands start with `$` (`$interviewly:start`). In Antigravity, plugins load automatically after `./install.sh antigravity`; check that Interviewly is enabled in Customizations.
+Run `/plugin` in Claude Code and check Interviewly is installed and enabled, then `/reload-plugins` or start a new session. In Codex the commands start with `$` (`$interviewly:start`). In Antigravity, plugins load automatically after `python3 install.py antigravity` (on Windows: `python install.py antigravity`, or `./install.sh antigravity` on macOS/Linux); check that Interviewly is enabled in Customizations.
 
 **I'm not getting new versions.**
 Claude Code doesn't update plugins from community marketplaces by itself. Run `/plugin marketplace update interviewly`, then `/reload-plugins`. [Updating and removing](how-it-works.md#updating-and-removing) has the commands for Codex and Antigravity.
 
 **"Interviewly needs Python 3.8 or newer."**
-Install Python from [python.org](https://www.python.org/downloads/). On Windows, `python` or `py -3` is used when `python3` isn't there. Without Python it can still give you likely questions or a short mock from a pasted CV, but it can't save progress or read PDF and Word files.
+Install Python from [python.org](https://www.python.org/downloads/). On Windows, tick **"Add python.exe to PATH"** during setup; if typing `python3` opens the Microsoft Store instead of running Python, turn off the Python entries under **Settings → Apps → Advanced app settings → App execution aliases**. Interviewly uses `python` or `py -3` when `python3` isn't there. Without Python it can still give you likely questions or a short mock from a pasted CV, but it can't save progress or read PDF and Word files.
+
+**Windows install tips (Claude Code, Codex and Antigravity).**
+- **Antigravity:** run `python install.py antigravity` (or `py -3 install.py antigravity`) from PowerShell or Command Prompt — no Git Bash required. To remove it later, run `python install.py antigravity --uninstall`.
+- **Claude Code:** uses Git for Windows (which includes `bash` for the daily reminder hook). Make sure Python 3.8+ is on `PATH`.
+- **Codex:** type `$interviewly:start` inside Codex; if you pass it from PowerShell, wrap it in single quotes (`'$interviewly:start'`) so PowerShell doesn't expand `$interviewly` as an empty variable. Install Git for Windows if you want the daily reminder hook.
 
 **git isn't installed.**
 It still reads folders on your machine. It can't clone repos or work out who wrote what until git is there.

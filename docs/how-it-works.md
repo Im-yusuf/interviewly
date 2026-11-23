@@ -153,16 +153,28 @@ Searches carry only a company name, a role, a job's location or a technology nam
 This deletes everything Interviewly saved:
 
 ```bash
+# macOS and Linux
 rm -rf ~/.interviewly
+```
+
+```powershell
+# Windows (PowerShell)
+Remove-Item -Recurse -Force "$HOME\.interviewly"
 ```
 
 "Start over" in `/interviewly:setup` keeps a backup next to the folder. If you used it, delete the backups too:
 
 ```bash
+# macOS and Linux
 find ~ -maxdepth 1 -name '.interviewly.bak-*' -exec rm -rf {} +
 ```
 
-With `$INTERVIEWLY_HOME`, run `rm -rf "$INTERVIEWLY_HOME"` and `find "$(dirname "$INTERVIEWLY_HOME")" -maxdepth 1 -name "$(basename "$INTERVIEWLY_HOME").bak-*" -exec rm -rf {} +` instead.
+```powershell
+# Windows (PowerShell)
+Get-ChildItem "$HOME" -Force -Filter ".interviewly.bak-*" | Remove-Item -Recurse -Force
+```
+
+With `$INTERVIEWLY_HOME`, remove that folder and any `.bak-*` siblings beside it instead.
 
 Your AI app keeps its own conversation history, which holds what you pasted and what was read during sessions. Clear it in the app: Claude Code keeps it in `~/.claude/projects` (and copies of edited files in `~/.claude/file-history`), Codex in `~/.codex/sessions`, and Antigravity in its conversation list.
 
@@ -183,7 +195,7 @@ The skills are the same in all three apps. The differences:
 |---|---|---|
 | Claude Code | `/plugin marketplace update interviewly` | `/plugin uninstall interviewly@interviewly` |
 | Codex | `codex plugin marketplace upgrade` | `codex plugin remove interviewly@interviewly` |
-| Antigravity | `git pull` in your clone, then `./install.sh antigravity` | Delete `~/.gemini/config/plugins/interviewly` |
+| Antigravity | `git pull` in your clone, then `python3 install.py antigravity` (Windows: `python install.py antigravity`) | `python3 install.py antigravity --uninstall` (Windows: `python install.py antigravity --uninstall`), or delete `~/.gemini/config/plugins/interviewly` |
 
 Removing the plugin keeps your data in `~/.interviewly` until you [delete it](#deleting-your-data).
 

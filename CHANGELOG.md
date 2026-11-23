@@ -2,6 +2,11 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.11.2 · 2026-11-23
+
+- **Cross-platform installer (`install.py`).** Adds a standard-library Python installer (`python install.py antigravity`, plus `--uninstall`, `claude`, and `codex`) so Windows users can install, update and remove Interviewly for Antigravity natively from PowerShell or Command Prompt without Git Bash. `./install.sh antigravity --uninstall` now works on macOS and Linux too.
+- **Better Windows support across all platforms.** Hardens `hooks/nudge.sh` when `HOME` or `CLAUDE_PLUGIN_ROOT` is unset, adds a platform-shell test for Antigravity's `hooks.json` (run in CI on Windows `cmd.exe`, macOS and Linux), and adds Windows install, PowerShell quoting, Python Store alias, and data-deletion instructions across README, How it works, Troubleshooting and Privacy.
+
 ## 0.11.1 · 2026-11-23
 
 - **Daily reminder in Antigravity.** The Antigravity bundle now includes a `SessionStart` hook (`hooks.json`) running `scripts/interviewly.py nudge --format antigravity`. It displays the one-line reminder inline using `metadata.user_markdown` with an empty `systemMessage`, so the model never reads it.
