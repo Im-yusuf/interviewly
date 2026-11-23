@@ -130,7 +130,7 @@ Say **skip** when it asks for a job ad and pick **Check my CV first**. Once it h
 - **Take orders from a repo or a job ad.** Instructions hidden in what it reads are treated as text. No AI tool can fully rule that out, so keep your app's permission prompts on for code you didn't write.
 - **Nag.** At most one line a day, only when there's something worth practising, and you can turn it off.
 
-These are tested: [36 behaviour evals](evals/) run the skills on the sample projects, including a repo and a job ad with planted instructions, a request to inflate a CV, and interviews with known bluffs.
+These are tested: [37 behaviour evals](evals/) run the skills on the sample projects, including a repo and a job ad with planted instructions, a request to inflate a CV, and interviews with known bluffs.
 
 ## All commands
 

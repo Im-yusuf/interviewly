@@ -12,7 +12,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 ## 0. Load
 
 1. `HOME_DIR` = output of `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" home`. Read these whole, with your file-reading tool rather than a shell command: `${CLAUDE_PLUGIN_ROOT}/references/common.md` (the host rules and the helper script `iv`) and `${CLAUDE_PLUGIN_ROOT}/references/state-targets.md` (targets and debriefs). If that variable wasn't filled in, it's the folder two levels above this SKILL.md. Follow `${CLAUDE_PLUGIN_ROOT}/references/safety.md`.
-2. Subcommands. `<slug>` is the name of a file in `targets/`. Given a company name, use the file it matches; given none with `date` or `brief`, the active target; if nothing matches, show the list and ask.
+2. Subcommands. `<slug>` is the name of a file in `targets/`. Given a company name, use the file it matches; given none with `date` or `brief`, the active target (for `brief` with no active target, a general brief); if nothing matches, show the list and ask.
    - `brief [slug]`: follow **Pre-interview brief** at the end. Stop.
    - `list`: show the targets in `HOME_DIR/targets/` (company, role, date) and mark the active one. Stop.
    - `use <slug>`: set `profile.active_target` to that slug. Stop.

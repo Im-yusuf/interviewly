@@ -62,7 +62,7 @@ Examples: `/interviewly:interview taskly deep-dive`, `/interviewly:interview fas
 /interviewly:drill new <N>
 ```
 
-Five to ten minutes of short questions: the reviews you owe first, then today's new topics (including 30-second recall of your STAR stories). Each answer is scored on the spot and scheduled to come back. Type `explain` on a missed code topic to jump straight into `/interviewly:larp-it` tutor mode for that file. `N` sets how many questions (default 6). `new 5` changes how many new topics arrive each day (default 3).
+Five to ten minutes of short questions: the reviews you owe first, then today's new topics (including 30-second recall of your STAR stories). Each answer is scored on the spot and scheduled to come back. Type `explain` after missing a code topic and the drill ends with a `/interviewly:larp-it` walk through that file. `N` sets how many questions (default 6). `new 5` changes how many new topics arrive each day (default 3).
 
 ### `/interviewly:walkthrough`
 

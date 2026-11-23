@@ -23,7 +23,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 - Run `iv due --limit N --fill --json`, adding `--match "<slug>"` with the matched slug (never the user's words). Each item has a `kind`: `review` (practised before and due again; weakest first), `new` (today's new topics, a few a day, the ones that matter most for the active job first) and `extra` (the weakest practised topics, to fill up the drill). Reviews always come first: they're what the user owes.
 - Start `HOME_DIR/sessions/<YYYY-MM-DD-HHMM>-drill.md`, named with `iv stamp drill` (frontmatter `mode: drill`, `status: in-progress`).
 
-Tell the user in one line: how many items there are, roughly how long it'll take, and that `skip`, `explain` (to dig into a missed code topic) and `end` work.
+Tell the user in one line: how many items there are, roughly how long it'll take, and that `skip`, `explain` (after missing a code topic: a walk through that code once the drill's done) and `end` work.
 
 ## 2. Run it
 
@@ -31,7 +31,7 @@ For each item:
 1. Ask one **short** question that tests a single point and can be answered in 1–3 sentences. Use one question mark: don't tack on "Why does that matter?" or a second ask (save the why for the follow-up after a score of 2):
    - Start from the topic's `question` field, reworded so they practise the idea and not a memorised answer.
    - If that question is a broad walkthrough ("walk me through…", "what happens step by step…"), don't ask it as it is. Ask about its single most important point, which `answer_hint` names. For example, ask "When does the reminder actually run, relative to the response being sent?" rather than "Walk me through POST /todos".
-   - A `…/walkthrough` topic is the exception: ask for the 30-second version of that project's walkthrough. So is `profile/tell-me-about-yourself`: ask for the 30-second version of their pitch ("Tell me about yourself, in 30 seconds."), and score it against the `## Pitch` in `stories.md` if there is one. A `behavioral/…` topic asks for the 30-second version of that STAR story, scored against `stories.md` if there is one.
+   - A `…/walkthrough` topic is the exception: ask for the 30-second version of that project's walkthrough. So is `profile/tell-me-about-yourself`: ask for the 30-second version of their pitch ("Tell me about yourself, in 30 seconds."), and score it against the `## Pitch` in `stories.md` if there is one. A `behavioral/…` topic asks for the 30-second version of the story its `label` names (or their strongest story for that category), scored against that story in `stories.md` if it's there.
    - Number it, e.g. **3/6**, and mark new topics, e.g. **3/6 · new**.
    - End your turn and wait.
 2. Score it straight away, from 1 to 4, against `answer_hint` and the user's code (open the referenced file if the hint isn't enough). Reply in no more than three lines:
@@ -39,7 +39,7 @@ For each item:
    - **Answer:** the crisp correct answer in one or two sentences, with a file reference if relevant. If only the user knows it (what happened at a job with no code, a behavioral story), say what a strong answer names instead, with a gap such as `[the bottleneck you found]` for any fact you weren't given, never a guess
 3. If they scored 2, ask one quick follow-up on the same point before moving on (the follow-up doesn't change the score). On a **new** topic they couldn't answer, the **Answer** line is the lesson: make it the one idea to remember, in plain words. It comes back tomorrow either way.
 4. Append the item to the drill session file with your file edit tool, with a `**Score:** n/4` line. Then run `iv score "<topic id>" <n> --source "sessions/<drill file name>"`. It prints the next due date. An id with anything but lowercase letters, digits, `.`, `_`, `-` and `/` (an old topic) goes as JSON through `iv score --stdin` instead (safety rule 3).
-5. If the user types `explain` after missing a code-backed topic (`score ≤ 2` with a project and file reference), finish step 4 first, then run `interviewly:larp-it` tutor mode (`<project> <path[:function]>`) on that code so they can learn it on the spot.
+5. `explain` usually comes in place of an answer to the next question, and means the last item they missed (scored 2 or less). If that item is code-backed (a project, and a file in its `answer_hint`), say in one line that you'll walk them through that code as soon as the drill's done, then ask the unanswered question again. If it isn't, say so in one line and ask it again. `end` with a walk-through waiting skips the rest and goes to the wrap-up.
 
 ## 3. Wrap up
 
@@ -48,4 +48,4 @@ Set the session's `status: reviewed`, then run `iv streak --json`. Show:
 - A small table: topic · score · next due
 - What's next: how many reviews come back tomorrow (count the next-due dates you just got) and how many new topics are still waiting (`new_waiting` in `iv stats --json`). If more than 30 are waiting, mention once that `/interviewly:drill new 5` brings them in faster.
 
-Suggest `/interviewly:larp-it <project> <file:line>` for a missed code-backed item (`score ≤ 2`) that needs a quick walk-through, or `/interviewly:breakdown` / `/interviewly:prep` if 2 or more items from the same project or technology scored ≤ 2.
+If they asked to `explain` an item, run the `interviewly:larp-it` skill now in tutor mode on it, with arguments `<project> <path[:function]>` from its `answer_hint`. Otherwise suggest `/interviewly:larp-it <project> <path[:function]>` for a missed code-backed item (`score ≤ 2`) that needs a quick walk-through, or `/interviewly:breakdown` / `/interviewly:prep` if 2 or more items from the same project or technology scored ≤ 2.

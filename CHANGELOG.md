@@ -2,6 +2,14 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.12.1 · 2026-11-23
+
+- **No spoilers in code review.** The planted bugs in a code-review interview, and the root cause in a debug one, used to be written to the session file at the start, where your app shows them. They're now written only when the interview ends, and a resumed code review shows its diff again.
+- **Debug interviews answer back.** Ask for logs, metrics, a repro or a file and the interviewer answers as your system would, consistent with your real code and the incident's cause, without naming it. With no code to debug, it says so and runs a code review instead.
+- **Scored against the key.** The reviewer lists which planted issues you caught and missed, credits real ones it didn't plant, and sends the most important one you missed to your drills as one short question.
+- **`explain` keeps your drill.** It used to leave the drill halfway. Now the drill finishes, then walks you through the code you missed.
+- **Smaller fixes.** A story drill asks for the story its topic names. Story topic ids follow one clear rule. `/interviewly:target brief` with no job set makes a general brief instead of asking. A new eval checks that a code review opens with the diff and gives nothing away.
+
 ## 0.12.0 · 2026-11-23
 
 - **Code-review and live-debugging interview modes.** `/interviewly:interview` now supports `code-review` (reviewing a realistic 40–80 line PR in your stack with planted bugs and trade-offs, scored on what you caught vs. missed) and `debug` (triaging a production incident or feature extension in your own repo), with dedicated rubric anchors and report-card support.
