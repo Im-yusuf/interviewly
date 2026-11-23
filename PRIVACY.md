@@ -18,7 +18,7 @@ Your CV and code are read by the AI model your app uses (Claude in Claude Code, 
 - **A headless browser** (Chrome, Chromium, Edge or Brave), only to make a share image, or a CV PDF in a script its own PDF writer can't set. The pages it renders are local files.
 - **Your own browser,** through your app's browser tool (such as Claude in Chrome), only when you ask `/interviewly:linkedin` to read or change your LinkedIn profile there. [What leaves your machine](#what-leaves-your-machine) says how changes are made.
 - **PDF readers already on your machine** (macOS PDFKit, `pdftotext`), only to check that a CV PDF it built reads the same in each of them.
-- **One hook.** When a session starts, [`hooks/nudge.sh`](hooks/nudge.sh) runs `scripts/interviewly.py nudge`. It reads your practice schedule and prints at most one line a day. It does nothing until you've set Interviewly up, never uses the network, and its line is shown to you without being added to the model's context. Hooks run without asking the model first, which is why this one is small and does only that. `/interviewly:setup reminder off` turns it off.
+- **One hook.** When a session starts, [`hooks/nudge.sh`](hooks/nudge.sh) (in Claude Code and Codex) or `hooks.json` (in Antigravity) runs `scripts/interviewly.py nudge`. It reads your practice schedule and prints at most one line a day. It does nothing until you've set Interviewly up, never uses the network, and its line is shown to you without being added to the model's context. Hooks run without asking the model first, which is why this one is small and does only that. `/interviewly:setup reminder off` turns it off.
 
 It never edits, builds, installs or runs anything in your projects unless you ask.
 

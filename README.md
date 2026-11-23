@@ -175,7 +175,7 @@ codex plugin marketplace add Im-yusuf/interviewly
 codex plugin add interviewly@interviewly
 ```
 
-**Antigravity.** Run these in a terminal, then restart Antigravity and type `/interviewly:start`:
+**Antigravity.** Run these in a terminal, then type `/interviewly:start` (Antigravity loads it automatically):
 
 ```bash
 git clone https://github.com/Im-yusuf/interviewly

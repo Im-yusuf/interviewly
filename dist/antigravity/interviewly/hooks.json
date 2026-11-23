@@ -1,0 +1,11 @@
+{
+  "interviewly-nudge": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python3 scripts/interviewly.py nudge --format antigravity || python scripts/interviewly.py nudge --format antigravity || py -3 scripts/interviewly.py nudge --format antigravity || echo {}",
+        "timeout": 5
+      }
+    ]
+  }
+}

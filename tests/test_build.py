@@ -65,7 +65,12 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(data["name"], "interviewly")
         self.assertTrue((COMMITTED / data["logo"]).exists())
         self.assertLessEqual(len(data["suggestedPrompts"]), 3)
-        self.assertFalse((COMMITTED / "hooks.json").exists(), "hooks would inject into Antigravity's context")
+        hooks = json.loads((COMMITTED / "hooks.json").read_text(encoding="utf-8"))
+        handlers = hooks["interviewly-nudge"]["SessionStart"]
+        self.assertEqual(len(handlers), 1)
+        self.assertEqual(handlers[0]["type"], "command")
+        self.assertIn("scripts/interviewly.py nudge --format antigravity", handlers[0]["command"])
+        self.assertLessEqual(handlers[0]["timeout"], 10)
 
     def test_refuses_to_replace_a_folder_that_isnt_an_earlier_build(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -173,7 +173,7 @@ Your AI app keeps its own conversation history, which holds what you pasted and 
 The skills are the same in all three apps. The differences:
 
 - **Codex** writes commands with `$` (`$interviewly:drill`), asks with numbered options outside Plan mode, and needs you to approve the reminder once in `/hooks`.
-- **Antigravity** shows the reminder in the start skill's "welcome back" line instead of at session start. Interviewly's agents there follow your own terminal approval setting; none is set to run commands by itself.
+- **Antigravity** loads the plugin automatically without a restart, runs the daily reminder at session start via `hooks.json` without adding it to the model's context, and keeps every agent on your own terminal approval setting (none is set to run commands by itself).
 - **Changing your LinkedIn profile for you** (`/interviewly:linkedin apply`) needs a browser the app can drive: Claude in Chrome in Claude Code (turn it on with `/chrome`), or the app's own browser tool where it has one. Without one you get the paste sheet, which works in every app.
 - **claude.ai and the Codex IDE extension** can't load plugins that read local code, so they aren't supported.
 

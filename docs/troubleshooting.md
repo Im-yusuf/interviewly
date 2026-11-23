@@ -9,7 +9,7 @@ Start with the health check. It prints versions and counts only (no names, paths
 ## Installing and updating
 
 **The `/interviewly:` commands don't show up.**
-Run `/plugin` in Claude Code and check Interviewly is installed and enabled, then `/reload-plugins` or start a new session. In Codex the commands start with `$` (`$interviewly:start`). In Antigravity, restart the app after `./install.sh antigravity`.
+Run `/plugin` in Claude Code and check Interviewly is installed and enabled, then `/reload-plugins` or start a new session. In Codex the commands start with `$` (`$interviewly:start`). In Antigravity, plugins load automatically after `./install.sh antigravity`; check that Interviewly is enabled in Customizations.
 
 **I'm not getting new versions.**
 Claude Code doesn't update plugins from community marketplaces by itself. Run `/plugin marketplace update interviewly`, then `/reload-plugins`. [Updating and removing](how-it-works.md#updating-and-removing) has the commands for Codex and Antigravity.
@@ -95,7 +95,7 @@ That's deliberate. Below a quarter of your topics practised, a number would mean
 `/interviewly:drill new 5` sets how many new topics arrive each day (3 by default). Before an interview date it brings in more by itself.
 
 **The daily reminder never shows.**
-It shows at most once a day, only at the start of a new session, and only when there's something to practise. In Codex you approve it once in `/hooks`. In Antigravity it's the first line of `/interviewly:start` instead. On Windows it needs bash, which comes with Git for Windows. The doctor shows whether it's on and whether it last failed.
+It shows at most once a day, only at the start of a new session, and only when there's something to practise. In Codex you approve it once in `/hooks`. On Windows, Claude Code and Codex need bash (which comes with Git for Windows); Antigravity runs Python directly. The doctor shows whether it's on and whether it last failed.
 
 **I want a clean slate.**
 `/interviewly:setup`, then **Start over**. Your old data is kept as a backup next to the folder until you delete it.

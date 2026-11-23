@@ -2,6 +2,11 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
+## 0.11.1 · 2026-11-23
+
+- **Daily reminder in Antigravity.** The Antigravity bundle now includes a `SessionStart` hook (`hooks.json`) running `scripts/interviewly.py nudge --format antigravity`. It displays the one-line reminder inline using `metadata.user_markdown` with an empty `systemMessage`, so the model never reads it.
+- **No restart required in Antigravity.** Updated the installer and docs to reflect that Antigravity loads installed plugins automatically on the next turn.
+
 ## 0.11.0 · 2026-11-12
 
 - **Your LinkedIn profile.** `/interviewly:linkedin` reviews your own profile against your CV and your code. It lists where the two disagree (a title, a date, a number), which claims would be hard to defend in an interview, and what your code shows that the profile leaves out. Then it writes a new headline, About, role text, project entries and a top-five skills list for you to paste in, under the same rule as the CV rewrite: nothing invented, and safer wording only removes or softens. `check` stops after the findings.

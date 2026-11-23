@@ -46,7 +46,7 @@ case "${1:-}" in
       fi
       echo "Installed to $dest"
     fi
-    echo "Restart Antigravity, then type: /interviewly:start"
+    echo "Antigravity loads it automatically. Type: /interviewly:start"
     ;;
   claude)
     echo "In Claude Code, run:"

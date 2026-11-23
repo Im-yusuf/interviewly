@@ -42,7 +42,7 @@ jobs:
       - name: JSON manifests parse
         shell: bash
         run: |
-          for f in .claude-plugin/*.json .codex-plugin/plugin.json hooks/hooks.json dist/antigravity/interviewly/plugin.json; do
+          for f in .claude-plugin/*.json .codex-plugin/plugin.json hooks/hooks.json dist/antigravity/interviewly/plugin.json dist/antigravity/interviewly/hooks.json; do
             python -m json.tool "$f" > /dev/null
           done
 

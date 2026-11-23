@@ -249,6 +249,23 @@ class InterviewlyTest(unittest.TestCase):
         self.write("config.json", json.dumps({"nudge": False}))
         self.assertEqual(self.run_cli("nudge"), "")
 
+    def test_nudge_antigravity_format_hides_from_model_and_returns_empty_json_when_silent(self):
+        # Silent without profile -> valid empty JSON object
+        self.assertEqual(json.loads(self.run_cli("nudge", "--format", "antigravity")), {})
+        self.write("profile.json", "{}")
+        self.seed("a/x", "a/y")
+        payload = json.loads(self.run_cli("nudge", "--format", "antigravity"))
+        self.assertEqual(len(payload["injectSteps"]), 1)
+        sys_msg = payload["injectSteps"][0]["systemMessage"]
+        self.assertEqual(sys_msg["systemMessage"], "")
+        self.assertIn("2 new topics to learn today", sys_msg["metadata"]["user_markdown"])
+        # Already shown today -> empty JSON object
+        self.assertEqual(json.loads(self.run_cli("nudge", "--format", "antigravity")), {})
+        # Turned off -> empty JSON object
+        self.write(".nudge-shown", "")
+        self.write("config.json", json.dumps({"nudge": False}))
+        self.assertEqual(json.loads(self.run_cli("nudge", "--format", "antigravity")), {})
+
     # --- incremental CV audit ---
 
     CV = """# Sam Rivera

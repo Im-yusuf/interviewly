@@ -1550,9 +1550,16 @@ def cmd_nudge(args):
     """Never prints an error: it runs at the start of every session. A failure goes to .nudge-error for `iv check`."""
     global QUIET
     QUIET = True
+    antigravity = getattr(args, "format", "claude") == "antigravity"
+
+    def silent():
+        if antigravity:
+            print("{}")
+
     try:
         check_home()
     except Exception:
+        silent()
         return
     marker = home() / ".nudge-error"
     try:
@@ -1561,12 +1568,26 @@ def cmd_nudge(args):
         with contextlib.suppress(Exception):
             if home().is_dir():
                 write_atomic(marker, f"{dt.date.today().isoformat()} {type(e).__name__}: {e}\n")
+        silent()
         return
     with contextlib.suppress(OSError):
         if marker.exists():
             marker.unlink()
     if message:
-        print(json.dumps({"systemMessage": message}))
+        if antigravity:
+            # Empty systemMessage + metadata.user_markdown shows the line to the user without adding it to model context.
+            print(json.dumps({
+                "injectSteps": [{
+                    "systemMessage": {
+                        "systemMessage": "",
+                        "metadata": {"user_markdown": message},
+                    }
+                }]
+            }))
+        else:
+            print(json.dumps({"systemMessage": message}))
+    else:
+        silent()
 
 
 def focus_slugs(focus):
@@ -1962,7 +1983,9 @@ def main():
         c = sub.add_parser(name)
         c.add_argument("--json", action="store_true")
         c.set_defaults(fn=fn)
-    sub.add_parser("nudge").set_defaults(fn=cmd_nudge)
+    n = sub.add_parser("nudge")
+    n.add_argument("--format", choices=("claude", "antigravity"), default="claude")
+    n.set_defaults(fn=cmd_nudge)
     for name, fn in (("report", cmd_report), ("share", cmd_share)):
         c = sub.add_parser(name)
         c.add_argument("session")
