@@ -39,7 +39,7 @@ Tell the user in one line that everything stays on their machine in `HOME_DIR`. 
 From the CV, collect:
 - name, a one-line headline, and roughly how many years of experience
 - the **language** the CV is written in, as a BCP 47 tag (`en-GB`, `en-US`, `fr-FR`, `de-DE`; for English, pick GB or US from the spelling and location). Save it as `profile.cv_language`. The cv skill uses it for section headings and the PDF's language.
-- **skills**: normalise the names (e.g. "Fast API" → FastAPI) and give each a `slug` and a `category`. The categories are the `## ` headings of `${CLAUDE_PLUGIN_ROOT}/references/question-patterns.md`, except the last one (Behavioral). List them with `grep '^## ' <file> | grep -v '^## Behavioral'` rather than reading the whole file
+- **skills**: normalise the names (e.g. "Fast API" → FastAPI) and give each a `slug` and a `category`. The categories are the `## ` headings of `${CLAUDE_PLUGIN_ROOT}/references/question-patterns.md`, except the last one (Behavioral). List them with your Grep tool (pattern `^## `) on that file, rather than a shell command or reading the whole file
 - **projects**: personal projects, open-source work, and jobs or internships, each with their bullets
 - **claims**: every bullet with a number, a leadership or ownership verb (led, owned, architected, mentored), a scope ("used by 10k users") or an expertise level ("expert in", "advanced"). Number them `c1`, `c2`, … and give each a `type`. This stays a plain list: the audit keeps risk and evidence in `audit.json`, under its own ids.
 

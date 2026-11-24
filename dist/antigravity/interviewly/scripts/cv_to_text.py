@@ -545,9 +545,10 @@ def main():
     for stream in (sys.stdout, sys.stderr):   # UTF-8 whatever the console's code page
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-    if len(sys.argv) != 2:
+    argv = [a for a in sys.argv[1:] if a != "--"]   # safety rule 3 puts `--` before a user's path
+    if len(argv) != 1:
         sys.exit("usage: cv_to_text.py <path>")
-    path = Path(sys.argv[1]).expanduser()
+    path = Path(argv[0]).expanduser()
     suffix = path.suffix.lower()
     pages = (f"{path.name} is an Apple Pages file, which this can't read. In Pages, choose File > Export To > PDF "
              "(or Word), then use that file.")

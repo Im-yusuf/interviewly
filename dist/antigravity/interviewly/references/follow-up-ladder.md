@@ -18,7 +18,7 @@ Start a thread at **what** or **how**, depending on level and persona. After eac
 - **Partly right** → stay on the rung and narrow it: "Okay, and specifically where does that happen?"
 - **Weak or wrong** → one probing follow-up on the same rung ("Are you sure? What would happen if…?"), then move on. Don't pile on.
 
-Stop a thread after at most 3 follow-ups (the bar-raiser may use all 3; the recruiter usually uses 0 or 1). System design is the exception: one thread of about 6–8 interviewer turns, through the stages in `personas.md`.
+Stop a thread after at most 3 follow-ups (the bar-raiser may use all 3; the recruiter usually uses 0 or 1). System design, code review and debug are the exceptions: one thread each, as long as the interview skill's step 2 says (system design's stages are in `personas.md`).
 
 ## Triggers: always follow up when you hear…
 

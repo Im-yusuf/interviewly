@@ -32,7 +32,8 @@ HOME_DIR/
 ├── guides/
 │   ├── <slug>-breakdown.md written by /interviewly:breakdown
 │   ├── <skill-slug>.md     written by /interviewly:prep
-│   └── <target-slug or general>-questions.md   the likely-questions guide (/interviewly:start)
+│   ├── <target-slug or general>-questions.md   the likely-questions guide (/interviewly:start)
+│   └── <target-slug or general>-brief.md       the pre-interview brief (/interviewly:target brief)
 ├── targets/<slug>.md       job-description analyses (/interviewly:target), with a `## Rounds` log (/interviewly:debrief)
 ├── debriefs/<YYYY-MM-DD>-<target-or-company>-<round>.md   real-interview debriefs
 ├── learning/<slug>.json    the /interviewly:larp-it plan and progress for one project

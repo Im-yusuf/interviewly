@@ -88,7 +88,7 @@ Builds a bank of true STAR stories from your work by asking you a few questions 
 
 ```
 /interviewly:larp-it <project>
-/interviewly:larp-it <project> <file>[:function]
+/interviewly:larp-it <project> <file>[:line|:function]
 /interviewly:larp-it <project> plan | new plan | next
 ```
 

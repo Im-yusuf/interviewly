@@ -510,7 +510,8 @@ def render_plan(plan):
                 if checked:
                     lines.append(f"           ({length(squash(text))} of {limit} characters)")
         elif do == "add":
-            for name, text in (step.get("fields") or {}).items():
+            fields = step.get("fields")
+            for name, text in (fields.items() if isinstance(fields, dict) else ()):
                 block(str(name), text)
         elif do == "reorder":
             block("new", ", ".join(step["to"]))
@@ -540,7 +541,7 @@ def main():
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-    args = [a for a in sys.argv[1:] if a != "--open"]
+    args = [a for a in sys.argv[1:] if a not in ("--open", "--")]   # safety rule 3 puts `--` before a user's path
     show = "--open" in sys.argv[1:]
     wanted = {"read": 2, "limits": 2, "sheet": 2, "plan": 2, "done": 4}
     if not args or wanted.get(args[0]) != len(args) or (show and args[0] != "sheet"):

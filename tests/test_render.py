@@ -255,6 +255,12 @@ class ScreenshotTest(unittest.TestCase):
                 mock.patch.object(render.subprocess, "run", side_effect=run), mock.patch("sys.stderr", stderr):
             return render.screenshot(self.page, self.png, 1200, 630), stderr.getvalue()
 
+    def test_chrome_never_touches_the_keychain(self):
+        seen = []
+        self.shoot(lambda cmd, **kw: seen.append(cmd) or subprocess.CompletedProcess(cmd, 1))
+        self.assertIn("--use-mock-keychain", seen[0])        # macOS shows "Keychain Not Found" if it looks for one
+        self.assertIn("--password-store=basic", seen[0])     # the Linux keyring's unlock prompt
+
     def test_a_failed_run_never_returns_the_old_png(self):
         result, err = self.shoot(lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1))
         self.assertIsNone(result)

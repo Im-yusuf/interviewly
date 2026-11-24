@@ -17,7 +17,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
    - `list`: show the targets in `HOME_DIR/targets/` (company, role, date) and mark the active one. Stop.
    - `use <slug>`: set `profile.active_target` to that slug. Stop.
    - `clear`: set `profile.active_target` to `null`. Stop.
-   - `date <slug> <YYYY-MM-DD>`: set `interview_date` in that target's frontmatter, so practice is scheduled to finish before it and the daily reminder counts down to it. Stop.
+   - `date <slug> <YYYY-MM-DD>`: set `interview_date` in that target's frontmatter, so practice is scheduled to finish before it and the daily reminder counts down to it. If it isn't the active target, say that the schedule and the countdown follow the active target only, and offer `use <slug>`. Stop.
 3. Otherwise, get the job description: read a file path, fetch a URL with your web tool (the job ad only), or use pasted text from the arguments or the conversation. If there's nothing to go on, the fetch fails or returns no job text, or you have no web tool, ask the user to paste it: LinkedIn, Workday and many other job sites need a login or JavaScript.
 4. Read `profile.json`, and from each dossier only what the map needs: `iv dossier "<slug>" --top "Summary" "Stack" "Weak spots" "Probe points" "CV claims vs code"`. No `profile.json`? Unless the arguments include `quick`, run the `interviewly:start` skill with the job ad instead (it sets the user up and analyses this job too) and stop. In quick mode, carry on: every requirement shows as "unknown".
 
@@ -78,12 +78,12 @@ In quick mode (called from the start skill), return just a three-line summary: f
 
 A calm, scannable one-page cheat sheet for the night before or 30 minutes before the call, built strictly from what is already in `HOME_DIR` (never invent facts, numbers or company details; keep every bracketed gap as it is).
 
-1. Read `profile.json`, `targets/<slug>.md` (if a target is named or active; otherwise make a general brief), `stories.md` (if it exists), `audit.md` (if it exists), `iv stats --json` (for the weakest topics), and the top 2–3 relevant dossiers via `iv dossier "<project-slug>" "Summary" "Weak spots" "Probe points"`.
+1. Read `profile.json`, `targets/<slug>.md` (if a target is named or active; otherwise make a general brief), `stories.md` (if it exists), `audit.md` (if it exists), `iv stats --json` (for the weakest topics), `projects/index.json`, and the top 2–3 relevant projects that already have a dossier (`dossier` not null) via `iv dossier "<project-slug>" "Summary" "Weak spots" "Probe points"`. Don't write missing dossiers now.
 2. Write `HOME_DIR/guides/<slug, or "general">-brief.md`, kept concise (under about 700 words so it fits on one page):
    - **Header:** Company · Role · Interview date · two-line company snapshot (sourced research from the target file only).
    - **Your 90-second pitch:** from `## Pitch` in `stories.md` (or a 3-bullet outline from `cv.md` if none is saved yet, with a note to run `/interviewly:walkthrough pitch`).
-   - **Projects to lead with (2–3):** a one-line 30-second hook plus the top 2–3 technical gotchas with `path:line` references from each dossier.
+   - **Projects to lead with (2–3):** a one-line 30-second hook plus the top 2–3 technical gotchas with `path:line` references from each dossier (none for a CV-only dossier).
    - **Top 3 STAR stories:** title, the prompt it answers, and the 30-second version from `stories.md`, matched to the company's values and role level (if `stories.md` has no stories yet, say so in one line and suggest `/interviewly:stories`).
    - **Watch-list:** the bridging answers for the top gaps from the target file, the weakest topics from `iv stats`, and any remaining high-risk CV claims from `audit.md`.
-   - **Logistics & questions to ask them:** saved logistics lines (with bracketed gaps for anything unsaid) and the 3 sharpest questions to ask from the target file.
+   - **Logistics & questions to ask them:** the logistics questions to expect, with gaps such as `[your range]` (the user's own figures and status stay in the target file), and the 3 sharpest questions to ask from the target file.
 3. Show the full brief in chat and give its file path so they can keep it open beside the call.

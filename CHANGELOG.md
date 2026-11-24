@@ -2,13 +2,19 @@
 
 All notable changes to Interviewly. Versions follow [semantic versioning](https://semver.org).
 
-## 0.12.1 · 2026-11-23
+## 0.12.1 · 2026-11-24
 
-- **No spoilers in code review.** The planted bugs in a code-review interview, and the root cause in a debug one, used to be written to the session file at the start, where your app shows them. They're now written only when the interview ends, and a resumed code review shows its diff again.
-- **Debug interviews answer back.** Ask for logs, metrics, a repro or a file and the interviewer answers as your system would, consistent with your real code and the incident's cause, without naming it. With no code to debug, it says so and runs a code review instead.
-- **Scored against the key.** The reviewer lists which planted issues you caught and missed, credits real ones it didn't plant, and sends the most important one you missed to your drills as one short question.
-- **`explain` keeps your drill.** It used to leave the drill halfway. Now the drill finishes, then walks you through the code you missed.
-- **Smaller fixes.** A story drill asks for the story its topic names. Story topic ids follow one clear rule. `/interviewly:target brief` with no job set makes a general brief instead of asking. A new eval checks that a code review opens with the diff and gives nothing away.
+- **No spoilers in code review.** The planted bugs in a code-review interview, and the root cause in a debug one, used to be written to the session file at the start, where your app shows them. They're now written only when the interview ends, and the topic id names the mode, never the bug. Pausing saves the open question with its diff, and a resumed session keeps the same answer key and carries on through its remaining stages.
+- **Debug interviews answer back.** Ask for logs, metrics, a repro or a file and the interviewer answers as your system would, consistent with your real code and the incident's cause, without naming it. With no code to debug, it runs a code review instead. A mode named without a project picks one.
+- **Scored against the key.** The reviewer lists which planted issues you caught and missed, credits real ones it didn't plant, and sends the most important one you missed to your drills as one short question that quotes the lines, not a file you don't have.
+- **Safer by default.** `iv` no longer reads or writes anything in `repos/`: a cloned repo's links could have taken its pre-approved writes outside your Interviewly folder. Setup no longer runs a shell `grep` on the plugin folder, which made Claude Code stop to ask (a unit test now catches that). Your salary, notice period and right-to-work answers stay in the job's file, out of the brief and the likely-questions guide.
+- **No keychain prompts.** The headless Chrome that makes CV PDFs, share images and report screenshots no longer touches the macOS keychain or the Linux keyring, so it can't stop to ask about one: macOS showed "Keychain Not Found" when Chrome ran without a home folder that has one.
+- **Learning your code.** `explain` in a drill no longer leaves the drill halfway: the walk-through comes after it, on the file you missed, even with no lesson plan. Tutor mode saves its session, takes `path:line` and reuses topic ids. Breakdown no longer draws an architecture for a project known only from your CV. The project analyst matches you by your CV name and GitHub username.
+- **Start, target and progress.** The returning-user menu never offers more than four choices, and stops recommending a debrief you've already done. The brief uses only projects already analysed, is written again for a later round, and `target date` on a job that isn't active says the countdown follows the active one.
+- **CV and LinkedIn.** A new CV asks before presenting code whose author is unknown as yours, and an unfilled `[gap]` never reaches a CV or profile. `linkedin plan` and `apply` go straight to the saved plan. An interrupted audit's leftover files are cleared before the next audit. `cv_to_text.py` and `linkedin_profile.py` accept `--` before a path, and a skill added with odd fields no longer crashes `plan`.
+- **Practice schedule.** A topic you practise on the interview day isn't due again that day. `iv dossier` keeps a code block whole instead of stopping at a `## ` line inside it.
+- **Installers.** Uninstalling a linked install removes only the link, and says so when something couldn't be removed. Installs stage on the same disk as the plugins folder, so a swap can't stop halfway. The reminder works when `INTERVIEWLY_HOME` starts with `~`.
+- **Smaller fixes.** Drills say what `skip` and `end` do. Two new stories in one category get different topic ids. A new eval checks that a code review opens with the diff and gives nothing away.
 
 ## 0.12.0 · 2026-11-23
 

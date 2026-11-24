@@ -149,6 +149,9 @@ class CvToTextTest(unittest.TestCase):
         result = subprocess.run([sys.executable, str(ROOT / "scripts" / "cv_to_text.py"), str(path)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Sam Rivera", result.stdout)
+        dashed = subprocess.run([sys.executable, str(ROOT / "scripts" / "cv_to_text.py"), "--", str(path)],
+                                capture_output=True, text=True)              # safety rule 3's `--` before a path
+        self.assertEqual(dashed.stdout, result.stdout, dashed.stderr)
         self.assertIn("**Built APIs** with [FastAPI](https://fastapi.tiangolo.com)", result.stdout)
         self.assertIn("- sam@example.com: mailto:sam@example.com", result.stdout)
 

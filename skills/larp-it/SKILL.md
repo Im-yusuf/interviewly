@@ -1,7 +1,7 @@
 ---
 name: larp-it
 description: Learn your own code ("larp it"). 10-minute lessons on a project built with AI, riskiest code first, for code you can't explain yet.
-argument-hint: "<project> [path[:function]] | plan | new plan | next"
+argument-hint: "<project> [path[:line|:function]] | plan | new plan | next"
 allowed-tools: Read(/${CLAUDE_PLUGIN_ROOT}/**), Bash(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/interviewly.py" *)
 ---
 
@@ -25,9 +25,9 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
    IV_JSON_END
    ```
    Without git history, judge explain-risk from the code alone (complexity and the probe points) and carry on.
-5. Read `HOME_DIR/learning/<slug>.json` if it exists (the plan and progress).
+5. Read `HOME_DIR/learning/<slug>.json` if it exists (the plan and progress). A path after the project means tutor mode (section 3), with or without a plan.
 
-## 1. The plan (first time, `plan` or `new plan`)
+## 1. The plan (first time without a path, `plan` or `new plan`)
 
 With a saved plan, `plan` only shows it (each lesson's title, status and score) and stops: it never rebuilds or resets anything. `new plan` rebuilds it, keeping the lessons already done as they are.
 
@@ -37,7 +37,7 @@ Build a path of 6–10 lessons through the code, in this order: the entry point 
 - `files`: `["app/routers/todos.py:13-40", "app/database.py"]`
 - `goal`: what they'll be able to explain afterwards, in one sentence
 - `question`: the interview question this lesson prepares them for
-- `topic`: its topic id, named after what it teaches (`<slug>/<topic-slug>`, e.g. `fastapi-todo/request-to-db-row`), reusing an existing id when one fits. The id stays with the lesson, so a rebuilt plan never mixes two lessons' history. (Lessons in older plans without a `topic` keep `<slug>/learn-<n>`.)
+- `topic`: its topic id, named after what it teaches (`<slug>/<topic-slug>`, e.g. `fastapi-todo/request-to-db-row`), reusing an existing id when one fits (`iv ids` lists them). The id stays with the lesson, so a rebuilt plan never mixes two lessons' history. (Lessons in older plans without a `topic` keep `<slug>/learn-<n>`.)
 
 Save `HOME_DIR/learning/<slug>.json` as `{"project": "<slug>", "created": "<date>", "lessons": [{"n": 1, "topic", "title", "files", "goal", "question", "status": "todo", "score": null}]}`, and run `iv check`. Show the plan as a numbered list with one line each, say each lesson takes about 10 minutes, and start the first lesson not done unless the argument was `plan`.
 
@@ -65,11 +65,11 @@ Then:
 
 When every lesson is done, say so, show the scores, and suggest `/interviewly:walkthrough <slug>` and then `/interviewly:interview <slug> deep-dive`.
 
-## 3. Tutor mode (`larp-it <project> <path[:function]>`)
+## 3. Tutor mode (`larp-it <project> <path[:line|:function]>`)
 
-A focused session on one file or function, for code they know they can't explain.
+A focused session on one file or function, for code they know they can't explain. Start and log the session file as in section 2.
 
 1. Show the code in blocks of 5–15 lines (or point to the line ranges in their editor). For each block, ask them to explain it first, then confirm or correct in two lines. Stop at the important blocks; skip boilerplate.
 2. Ask "What breaks if we delete this line?" about the line that matters most.
 3. Ask the 3 interview questions this code is most likely to trigger (from the dossier's **Probe points** and `${CLAUDE_PLUGIN_ROOT}/references/follow-up-ladder.md`), one at a time, scoring each 1–4 with a short model answer.
-4. Record weak answers (score ≤ 2) in one `iv score --stdin` call, as above, with a list of objects and topic ids `<slug>/<topic-slug>`. Log the session as `mode: learn`, and offer the next lesson in the plan.
+4. If any answers were weak (score ≤ 2), record them in one `iv score --stdin` call, as above, with a list of objects: reuse a matching id from `iv ids`, otherwise `<slug>/<topic-slug>`. Set the session `status: reviewed`, then offer the next lesson in the plan, or to build a plan if there's none.

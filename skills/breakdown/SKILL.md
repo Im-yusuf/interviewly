@@ -19,7 +19,7 @@ Arguments: `$ARGUMENTS` (if that appears literally, use what the user asked for)
 4. Work out the project from the arguments by matching `projects/index.json` slugs and names. If there's no match or no argument, ask with options, with up to 4 projects as options. If the argument is a technology rather than a project (e.g. "ffmpeg"), say that `/interviewly:prep <technology>` covers technologies, and offer to run it.
 5. A second argument (other than `quick`), if present, is a **component** (e.g. "auth", "scene detection"). Then zoom in: write only sections 3, 4 and 6 below, in more depth, for that component.
 6. Read `projects/<slug>.md`. If the project's path is under `HOME_DIR/repos/` (a clone Interviewly made), update it quietly first: `git -C "<path>" pull --ff-only -q` (if it fails, for example offline, carry on with what's there). Then, if the project is a git repo and its newest commit (`git -C "<path>" log -1 --format=%cs`, adding `-- "<subdir>"` when its index entry has a `subdir`) is newer than the dossier's `analysed` date, offer to re-analyse it first with the `interviewly:project-analyst` agent, given the inputs setup step 5 lists (including `home` and `plugin`). In quick mode, re-analyse without asking.
-7. Use the dossier as a map, then **open the actual files** for each component so your explanations and `path:line` references are exact. Don't rely on the dossier for code details.
+7. Use the dossier as a map, then **open the actual files** for each component so your explanations and `path:line` references are exact. Don't rely on the dossier for code details. A project known only from the CV (`code: false`) has no files: write sections 1 and 5–9 from the CV and its dossier, with gaps for what they don't say, and leave out 2–4.
 8. If there's an active target (`profile.active_target`), read it so you can stress the parts of the project that matter for that role.
 
 ## 1. Write the guide
@@ -63,7 +63,7 @@ Terms from this project the user should be able to define in one sentence each.
 
 ## 2. In chat
 
-Don't paste the whole guide. Show:
+Don't paste the whole guide. Show (leaving out what the guide doesn't have: a zoomed-in guide has no pitch or diagram, a CV-only one no diagram):
 1. The 30-second pitch
 2. The architecture diagram
 3. The 5 most likely questions, each with a one-line answer

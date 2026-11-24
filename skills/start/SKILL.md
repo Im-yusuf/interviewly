@@ -31,8 +31,8 @@ If the doctor says `Profile: set up` (`HOME_DIR/profile.json` exists), the user 
   - **Practice interview**, or **Resume interview** when an interview transcript in `sessions/` (not `-drill`, `-learn` or `-walkthrough`) has `status: paused` or `in-progress`: run the `interviewly:interview` skill, with `resume` to resume.
   - **5-minute drill** (say how many reviews and new topics it has): run the `interviewly:drill` skill.
   - **Likely questions for <active target>** (or **Likely questions** with no target): read the guide they already have, `HOME_DIR/guides/<active target, or "general">-questions.md`. Show its 5 most likely questions, each with *why they'll ask* and the first sentence of the answer, and give the path. If that guide doesn't exist yet, write it now as **The full question guide** below describes (the profile is already there), then show the same.
-  - **Pre-interview brief** (first and "(Recommended)" when `countdown.days` is 0 or 1): run the `interviewly:target` skill with `brief`.
-  - **Just had an interview** (first and "(Recommended)" when `countdown.days` is -1 to -3): run the `interviewly:debrief` skill.
+  - **Pre-interview brief**, only when `countdown.days` is 0 or 1: first, "(Recommended)", and in place of the next option, so there are never more than four. Run the `interviewly:target` skill with `brief`.
+  - **Just had an interview** (first and "(Recommended)" when `countdown.days` is -1 to -3 and no file in `debriefs/` names the target or company, dated on or after the interview): run the `interviewly:debrief` skill.
 
 No `profile.json` but a `cv.md`? An earlier setup didn't finish: say so in one line and carry on from step 1, offering the saved CV in step 2.
 
@@ -114,7 +114,7 @@ In quick mode these skills ask the user nothing (setup still asks which repos to
 
 Write `HOME_DIR/guides/<target-slug or "general">-questions.md`: the **15 questions they're most likely to get**, grouped by interview stage (screen, technical, system design, behavioral). The screen stage starts with "Tell me about yourself": a 60–90 second answer (who they are now, one or two proof points from the CV and code, and why this role: the user's own reason, or the gap `[why you want this role]`), practised with `/interviewly:walkthrough pitch`. Draw on the target's predicted questions and logistics, each dossier's probe points (`iv dossier "<slug>" "Weak spots" "Probe points" "CV claims vs code"`), and the riskiest CV claims. For each question:
 - **Why they'll ask:** the job requirement, CV line or code that triggers it
-- **Your answer:** 60–120 words in the first person, answer first, grounded in their CV and code with file references. Never make up facts about their work: leave a gap that names what's missing, such as `[your part in it]`.
+- **Your answer:** 60–120 words in the first person, answer first, grounded in their CV and code with file references. Never make up facts about their work: leave a gap that names what's missing, such as `[your part in it]`. Leave the user's own figures and status (salary, notice period, right to work) out as gaps such as `[your range]`, here and in every `iv seed` field.
 - **Watch out for:** the follow-up it invites
 
 Add all 15 questions to the practice schedule: pass them to `iv seed` as a JSON list through a quoted heredoc (`<<'IV_JSON_END'`), as `references/safety.md` rule 3 shows. Ids are `<project-or-skill>/<topic>` with `skill` set, `behavioral/<category>` for behavioral questions and `profile/tell-me-about-yourself` for the pitch; reuse an existing id that matches (`iv ids`). They start as new topics, and drills bring in a few a day, this job's first, so the user never faces a long list on day one.

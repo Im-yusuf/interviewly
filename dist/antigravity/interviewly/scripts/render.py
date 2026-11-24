@@ -458,9 +458,11 @@ BROWSERS = (
 BROWSER_NAMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge",
                  "microsoft-edge-stable", "brave-browser", "chrome", "msedge")
 # The same hardening as cv_to_pdf.py's Chrome run: no first-run setup, extensions, background requests or
-# crash reports, and (in screenshot) a throwaway profile and temp folder
+# crash reports, no keychain or keyring (macOS asks the user when it can't find one), and (in screenshot) a
+# throwaway profile and temp folder
 CHROME_FLAGS = ("--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-                "--disable-background-networking", "--disable-crash-reporter", "--disable-breakpad", "--hide-scrollbars")
+                "--disable-background-networking", "--disable-crash-reporter", "--disable-breakpad", "--hide-scrollbars",
+                "--use-mock-keychain", "--password-store=basic")
 
 
 def find_browser():

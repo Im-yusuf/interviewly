@@ -145,6 +145,7 @@ class ReadTest(unittest.TestCase):
     def test_usage_and_missing_path(self):
         self.assertIn("usage:", run().stderr)
         self.assertIn("not found", run("read", Path(self.tmp.name) / "nope.zip").stderr)
+        self.assertIn("not found", run("read", "--", Path(self.tmp.name) / "nope.zip").stderr)   # `--` is accepted
 
 
 SUGGESTED = """---
@@ -356,6 +357,11 @@ class PlanTest(unittest.TestCase):
         self.assertIn(" 8. REMOVE Skills → Kubernetes   (asks you again first)\n", text)
         self.assertIn("Asked again one at a time, whatever you choose: 8\n", text)
         self.assertIn("Never part of a plan: your name, photo, contact details, settings, messages", text)
+
+    def test_a_skill_add_with_odd_fields_still_renders(self):
+        for fields in ("SQLAlchemy", ["SQLAlchemy"]):
+            plan = steps((5, "fields", fields))
+            self.assertIn(" 6. ADD    Skills → SQLAlchemy\n", "\n".join(linkedin_profile.render_plan(plan)))
 
     def test_long_text_is_shown_whole_when_new_and_cut_when_old(self):
         old = "x" * 250

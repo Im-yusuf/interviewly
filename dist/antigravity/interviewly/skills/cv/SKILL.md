@@ -45,7 +45,7 @@ Ask **once**, in a single plain-text message with the options numbered, for ever
 
 Use only what they answer: rough numbers with "~", a plain outcome where there's no number. A gap they don't fill and a bullet they don't confirm stay out. If they've said not to ask, use your safer wording, add only the Underselling items marked *yours*, and list the results bullets in `changes.md` under **Stronger with a real result**.
 
-**New CV:** instead, ask in one message for what the CV still needs: for each job, one to three things they did and what changed because of it; for each project, who it was for and any result; anything to add to the skills; and anything in `cv.md` they want changed.
+**New CV:** instead, ask in one message for what the CV still needs: for each job, one to three things they did and what changed because of it; for each project, who it was for and any result; anything to add to the skills; anything in `cv.md` they want changed; and to confirm each project or component whose **Written by** isn't them (someone else, an AI, or unknown). An unconfirmed one isn't presented as their work.
 
 ## 3. Write the new CV
 
@@ -93,7 +93,7 @@ The user gets **one file: the PDF.** No Word, text or HTML copies; the `.md` sta
 3. Fix every ✗ in the Markdown, and every ⚠ you can fix without inventing anything, then build and check again. Never change a true fact to clear one: a one-word or long legal name, year-only education dates and an undated project stay as they are, you never add months or dates you don't have, and a bullet with no result stays that way until the user gives one. If the checker doesn't recognise section names in `LANG`, that ⚠ is expected: keep the standard headings for that language rather than switching to English. Stop when nothing fails and the remaining warnings are honest trade-offs: for example, a missing keyword for something they've never done is a gap to talk about, not something to add. If the last page of a two-page CV is under about a third full, tell the user and offer to fill it with relevant work or cut to one page.
 4. Look at the PDF to check the layout by eye: nothing cut off, no heading alone at the bottom of a page, links underlined. Read the whole file (no page range); if your host can't show PDF pages, skip this step, since the checker has already read every line.
 5. Save the final checker output as `<folder>/ats-report.md`. Delete any `.docx`, `.txt` or `.html` copies of this CV that an earlier version left in the folder, so only the current PDF can be sent. Check that the PDF exists before you report it.
-6. **New CV:** copy the final Markdown to `HOME_DIR/cv.md` (it's now the user's CV) and set `profile.cv_path` to the new `.md`, so later runs tailor it instead of asking the New CV questions again, and the audit checks it.
+6. **New CV:** copy the final Markdown to `HOME_DIR/cv.md` (it's now the user's CV) and set `profile.cv_path` to `HOME_DIR/cv.md`, so later runs tailor it instead of asking the New CV questions again, and the audit checks it.
 
 ## 4. Changes and "why this company"
 

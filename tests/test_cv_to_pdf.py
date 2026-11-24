@@ -207,6 +207,14 @@ class BuildTest(unittest.TestCase):
         self.assertIn("cut about", result.stdout)
         self.assertTrue(out.exists())
 
+    def test_chrome_never_touches_the_keychain(self):
+        seen = []
+        with mock.patch.object(cv_to_pdf.subprocess, "run", side_effect=lambda cmd, **kw: seen.append(cmd)):
+            with self.assertRaises(cv_to_pdf.BrowserError):
+                cv_to_pdf.print_pdf("chrome", self.tmp / "p.html", self.tmp / "o.pdf", self.tmp / "profile")
+        self.assertIn("--use-mock-keychain", seen[0])       # macOS shows "Keychain Not Found" if it looks for one
+        self.assertIn("--password-store=basic", seen[0])    # the Linux keyring's unlock prompt
+
     def test_right_to_left_text_goes_to_chrome(self):
         src = self.tmp / "rtl.md"
         src.write_text("# Sam Rivera\nsam@example.com\n\n## Summary\nBackend developer (" + chr(0x5DE) + chr(0x5E4)

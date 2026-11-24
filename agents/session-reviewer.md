@@ -39,7 +39,7 @@ Be strict about these, and record each as a **flag** with the thread's number (`
 
 If the transcript notes that the bar-raiser deliberately stated a wrong premise, give credit when the candidate pushed back.
 
-**Code-review and debug** sessions are scored against the `## Interviewer's key` (with no key, find the issues in the diff yourself). Name each planted issue they caught in `landed` and each they missed in `missing`, and credit a real issue they found that the key doesn't list. In debug, reaching the root cause from the evidence beats a lucky guess. The thread's `question` and `answer_hint` come back in drills, which ask one short question, so make them about the most important issue they missed (or the most important one, if they caught all), with its line and the fix, never the whole review.
+**Code-review and debug** sessions are scored against the `## Interviewer's key` (with no key, find the issues in the diff yourself). Name each planted issue they caught in `landed` and each they missed in `missing`, and credit a real issue they found that the key doesn't list. In debug, reaching the root cause from the evidence beats a lucky guess. The thread's `question` and `answer_hint` come back in drills, which ask one short question, so make them about the most important issue they missed (or the most important one, if they caught all) and its fix, never the whole review, and pick the thread's `topic` for that issue: the transcript's `<focus>/code-review` or `<focus>/debug` id is a placeholder. A code-review diff isn't in their repo, so quote the one or two lines that matter in `question`, and keep file paths and diff line numbers out of `answer_hint`.
 
 ## Write the review JSON
 

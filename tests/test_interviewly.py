@@ -456,6 +456,21 @@ Python, FastAPI, Redis
             self.score(topic, n, "sessions/2026-11-13-0900-drill.md", day="2026-11-13")
         self.assertEqual(due("2026-11-14"), [])   # practised the day before: not owed again on the day
 
+    def test_a_topic_practised_on_the_interview_day_isnt_due_again_that_day(self):
+        self.target("2026-11-14")
+        self.score("fastapi/b", 4, "sessions/2026-11-14-0800-drill.md", day="2026-11-14")
+        self.assertEqual(json.loads(self.run_cli("due", "--json", day="2026-11-14")), [])
+
+    @unittest.skipUnless(os.name == "posix", "bash and a POSIX HOME")
+    def test_the_reminder_hook_expands_a_quoted_tilde_as_iv_does(self):
+        self.write("profile.json", "{}")
+        self.seed("a/x")
+        hook = Path(__file__).resolve().parents[1] / "hooks" / "nudge.sh"
+        env = {**os.environ, "HOME": str(self.home.parent), "INTERVIEWLY_HOME": "~/" + self.home.name,
+               "INTERVIEWLY_TODAY": self.day}
+        result = subprocess.run(["bash", str(hook)], capture_output=True, encoding="utf-8", env=env)
+        self.assertIn("systemMessage", result.stdout, result.stderr)
+
     def audited(self):
         self.write("cv.md", "# Sam Rivera\n\n## Projects\n\n### Taskly API\n"
                             "- Reduced p95 latency by 60% by moving database access to async\n")
@@ -1022,6 +1037,23 @@ Python, FastAPI, Redis
             self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(os.name == "posix", "symlinks need extra rights on Windows")
+    def test_cloned_code_is_never_a_path_iv_reads_or_writes(self):
+        """A cloned repo can commit links that lead out of the home folder, and skills run iv without asking."""
+        above, home, run = self.nested_home()
+        victim = above / "settings.json"
+        victim.write_text('{"theme": "dark"}', encoding="utf-8")
+        repo = home / "repos" / "evil"
+        repo.mkdir(parents=True)
+        (repo / "review.json").symlink_to(victim)
+        (repo / "out").symlink_to(above)
+        (repo / "plain.json").write_text(json.dumps({"score": 3, "mode": "drill", "threads": []}), encoding="utf-8")
+        for path in (repo / "review.json", repo / "out" / "settings.json", repo / "plain.json"):
+            result = run("apply", str(path))
+            self.assertEqual(result.returncode, 1, path)
+            self.assertIn("is in repos/", result.stderr, path)
+        self.assertEqual(victim.read_text(encoding="utf-8"), '{"theme": "dark"}')
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need extra rights on Windows")
     def test_dot_dot_after_a_linked_subfolder_is_followed_to_where_it_really_goes(self):
         """With sessions linked to a synced folder, `sessions/..` is the folder above the link's target."""
         above, home, run = self.nested_home()
@@ -1065,6 +1097,12 @@ Python, FastAPI, Redis
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "## Summary\nA todo API.\n\n")
         self.assertIn('no "## Explain-risk" section', result.stderr)
+
+    def test_dossier_keeps_a_code_block_whole(self):
+        self.write("projects/taskly-api.md", "## Non-obvious details\n```bash\n## step 1\nmake db\n```\nAfter.\n\n"
+                                             "## Numbers\n2 tests.\n")
+        self.assertEqual(self.run_cli("dossier", "taskly-api", "Non-obvious details"),
+                         "## Non-obvious details\n```bash\n## step 1\nmake db\n```\nAfter.\n\n")
 
     def test_dossier_takes_a_slug_never_a_path(self):
         self.write("projects/taskly-api.md", self.DOSSIER)

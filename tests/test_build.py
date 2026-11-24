@@ -248,7 +248,7 @@ class ReferencesTest(unittest.TestCase):
     READ_WHOLE_LIMIT = 12000   # bytes; common.md and each state file are read in one go
     CODE = re.compile(r"```.*?```|`[^`\n]+`", re.S)
     SHELL_READ = re.compile(r"(?:^|[;|&(]\s*|\n\s*)(?:sed|awk|grep|cat|head|tail)\s")
-    PLUGIN_PATH = re.compile(r"references/|CLAUDE_PLUGIN_ROOT|<plugin>|PLUGIN_DIR|<that file>")
+    PLUGIN_PATH = re.compile(r"references/|CLAUDE_PLUGIN_ROOT|<plugin>|PLUGIN_DIR|<that file>|<file>")
 
     def text(self, path):
         return path.read_text(encoding="utf-8")

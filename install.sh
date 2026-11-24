@@ -47,11 +47,12 @@ case "${1:-}" in
         echo "$dest exists and isn't an Interviewly install; not touching it." >&2; exit 1
       fi
       # Copy first, then swap, so a failed copy never leaves you without a working install.
-      # The old copy goes to a temporary folder (not the plugins folder, where it would load twice).
-      tmp="$(mktemp -d "${TMPDIR:-/tmp}/interviewly-install.XXXXXX")"
+      # The old copy goes to a folder beside the plugins folder: not in it, where it would load twice, and on the
+      # same disk, so each move is a rename that can't stop halfway.
+      mkdir -p "$plugins"
+      tmp="$(mktemp -d "$(dirname "$plugins")/interviewly-install.XXXXXX")"
       trap 'rm -rf "$tmp"' EXIT
       cp -R "$bundle" "$tmp/interviewly"
-      mkdir -p "$plugins"
       if [ -e "$dest" ]; then mv "$dest" "$tmp/old"; fi
       if ! mv "$tmp/interviewly" "$dest"; then
         if [ -e "$tmp/old" ]; then mv "$tmp/old" "$dest"; fi

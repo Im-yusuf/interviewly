@@ -196,6 +196,13 @@ def in_home(path):
     linked folder, `..` is the folder above the link's target, which the path as written doesn't show."""
     path = Path(path).expanduser()
     root = home()
+    for full in (os.path.abspath, os.path.realpath):   # a cloned repo's links could lead anywhere
+        repos, inner = full(root / "repos"), full(path)
+        try:
+            if os.path.normcase(os.path.commonpath([repos, inner])) == os.path.normcase(repos):
+                raise StateError(f"{path} is in repos/, the cloned code: iv doesn't read or write files there")
+        except ValueError:   # another drive, on Windows
+            pass
     for full in ((os.path.realpath,) if ".." in path.parts else (os.path.abspath, os.path.realpath)):
         base, inner = full(root), full(path)
         try:
@@ -491,7 +498,7 @@ def due_day(topic, day, plan=None):
             days = (interview - last).days
             if days > 1 or countdown["days"] > 0:   # on the day itself, yesterday's practice was the review before it
                 due = min(due, (last + dt.timedelta(days=interview_gap(days, topic["last_score"], days))).isoformat())
-        else:   # no practice date to go by: the day before
+        elif last is None:   # no practice date to go by: the day before (practised on the day: its own next_due)
             due = min(due, (interview - dt.timedelta(days=1)).isoformat())
     return due
 
@@ -1265,9 +1272,11 @@ def dossier_sections(text, wanted, top):
     the next `## ` heading. top adds what comes before the first heading (the frontmatter). Returns the text
     and the wanted headings the dossier doesn't have."""
     names = {w.strip().casefold(): w for w in wanted}
-    found, out, keep = set(), [], top
+    found, out, keep, fenced = set(), [], top, False
     for line in text.splitlines(keepends=True):
-        if line.startswith("## "):
+        if line.lstrip().startswith("```"):
+            fenced = not fenced                    # a `## ` comment in a quoted snippet isn't a heading
+        elif line.startswith("## ") and not fenced:
             heading = line[3:].strip().casefold()
             keep = heading in names
             if keep:

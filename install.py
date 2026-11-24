@@ -35,17 +35,21 @@ def is_interviewly(folder):
     return isinstance(data, dict) and data.get("name") == "interviewly" and README_MARKER in readme
 
 
-def _remove_readonly(func, path, _exc_info):
-    """Handle Windows read-only files during shutil.rmtree."""
-    try:
-        os.chmod(path, stat.S_IWRITE)
-        func(path)
-    except OSError:
-        pass
+def _remove_readonly(func, path, exc_info):
+    """Windows marks some files read-only, which rmtree can't delete: clear the flag and retry once."""
+    if os.name != "nt":
+        raise exc_info[1]
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 
 def rmtree(path):
-    shutil.rmtree(str(path), onerror=_remove_readonly)
+    """Delete an install. A linked one loses only its link, never the folder it points to."""
+    path = Path(path)
+    if path.is_symlink():
+        path.unlink()
+    else:
+        shutil.rmtree(str(path), onerror=_remove_readonly)
 
 
 def resolve_plugins_dir(dest=None):
@@ -67,7 +71,11 @@ def install_antigravity(dest=None, uninstall=False, bundle=None):
         if not is_interviewly(target):
             print(f"{target} exists and isn't an Interviewly install; not touching it.", file=sys.stderr)
             return 1
-        rmtree(target)
+        try:
+            rmtree(target)
+        except OSError as exc:
+            print(f"Couldn't remove {target}: {exc}", file=sys.stderr)
+            return 1
         print(f"Removed {target}")
         print("Your saved data stays in ~/.interviewly until you delete it.")
         return 0
@@ -89,17 +97,18 @@ def install_antigravity(dest=None, uninstall=False, bundle=None):
         print(f"{target} exists and isn't an Interviewly install; not touching it.", file=sys.stderr)
         return 1
 
-    # Stage outside the plugins directory so Antigravity never loads two copies during the swap.
-    tmp = Path(tempfile.mkdtemp(prefix="interviewly-install-"))
+    # Stage beside the plugins directory: not in it, where Antigravity would load two copies during the swap, and
+    # not in the system temp folder, where another disk turns each move into a copy that can fail halfway.
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix="interviewly-install-", dir=str(plugins_dir.parent)))
     try:
         staged = tmp / "interviewly"
         backup = tmp / "old"
         shutil.copytree(str(bundle), str(staged))
-        plugins_dir.mkdir(parents=True, exist_ok=True)
-        had_old = target.exists()
-        if had_old:
-            shutil.move(str(target), str(backup))
+        had_old = target.exists() or target.is_symlink()
         try:
+            if had_old:
+                shutil.move(str(target), str(backup))
             shutil.move(str(staged), str(target))
         except OSError as exc:
             if had_old and backup.exists() and not target.exists():
@@ -107,7 +116,10 @@ def install_antigravity(dest=None, uninstall=False, bundle=None):
             print(f"Couldn't install to {target}: {exc}; nothing was changed.", file=sys.stderr)
             return 1
     finally:
-        rmtree(tmp)
+        try:
+            rmtree(tmp)
+        except OSError:
+            pass   # only our own staging folder is left behind
 
     print(f"Installed to {target}")
     print("Antigravity loads it automatically. Type: /interviewly:start")

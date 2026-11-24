@@ -381,6 +381,7 @@ def print_pdf(browser, page, out, profile):
     cmd = [browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
            "--disable-extensions", "--disable-background-networking", "--disable-crash-reporter",
            "--disable-breakpad", "--hide-scrollbars", f"--user-data-dir={profile}", "--dns-prefetch-disable",
+           "--use-mock-keychain", "--password-store=basic",   # never the keychain: macOS may ask the user about it
            "--proxy-server=127.0.0.1:9", "--host-resolver-rules=MAP * ~NOTFOUND",
            "--no-pdf-header-footer", "--print-to-pdf-no-header", "--generate-pdf-document-outline",
            f"--print-to-pdf={out}", Path(page).as_uri()]

@@ -1,6 +1,7 @@
 """Tests for the cross-platform installer (install.py) on macOS, Linux and Windows."""
 import io
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -87,6 +88,49 @@ class InstallTest(unittest.TestCase):
                     rc = install.install_antigravity(dest=str(plugins))
             self.assertEqual(rc, 1)
             self.assertEqual((target / "marker.txt").read_text(encoding="utf-8"), "previous")
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need extra rights on Windows")
+    def test_uninstall_removes_a_linked_install_but_not_what_it_points_to(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = Path(tmp) / "clone"
+            shutil.copytree(str(ROOT / "dist" / "antigravity" / "interviewly"), str(clone))
+            mode = clone.stat().st_mode
+            plugins = Path(tmp) / "plugins"
+            plugins.mkdir()
+            (plugins / "interviewly").symlink_to(clone)
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(install.install_antigravity(dest=str(plugins), uninstall=True), 0)
+            self.assertFalse(os.path.lexists(plugins / "interviewly"))
+            self.assertEqual(clone.stat().st_mode, mode)
+            self.assertTrue(install.is_interviewly(clone))
+
+    @unittest.skipUnless(os.name == "posix" and os.geteuid() != 0, "needs a folder this user can't delete from")
+    def test_an_uninstall_that_fails_says_so(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugins = Path(tmp) / "plugins"
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(install.install_antigravity(dest=str(plugins)), 0)
+            stuck = plugins / "interviewly" / "stuck"
+            (stuck / "inner").mkdir(parents=True)
+            stuck.chmod(0o555)
+            try:
+                err = io.StringIO()
+                with redirect_stdout(io.StringIO()), redirect_stderr(err):
+                    rc = install.install_antigravity(dest=str(plugins), uninstall=True)
+                self.assertEqual(rc, 1)
+                self.assertIn("Couldn't remove", err.getvalue())
+            finally:
+                stuck.chmod(0o755)
+
+    def test_install_stages_beside_the_plugins_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugins = Path(tmp) / "a" / "plugins"
+            real = tempfile.mkdtemp
+            with mock.patch.object(install.tempfile, "mkdtemp", side_effect=real) as made, \
+                    redirect_stdout(io.StringIO()):
+                self.assertEqual(install.install_antigravity(dest=str(plugins)), 0)
+            self.assertEqual(made.call_args[1].get("dir"), str(plugins.parent))
+            self.assertEqual(sorted(p.name for p in plugins.parent.iterdir()), ["plugins"])   # staging cleaned up
 
     def test_uses_agy_cli_when_available_and_no_custom_dest(self):
         with mock.patch.dict(os.environ, {}, clear=False):

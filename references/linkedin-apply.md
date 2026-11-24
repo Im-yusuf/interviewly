@@ -34,12 +34,12 @@ Write every change as one step in `HOME_DIR/linkedin/plan.json`, from `profile.m
 
 - `do`: `edit` (the text of a field), `set` (a short field of an entry: a title, a date, a place), `add` (a new entry), `reorder` (the order of the entries in a section) or `remove` (an entry).
 - `section`: headline, about, experience, education, projects, skills, certifications, languages, volunteering, honors, courses, publications or featured. Nothing else can be in a plan.
-- `item`: the entry, named as the profile names it now. `from`: what the field says now, word for word from `profile.md` (`""` if it's empty). `to`: what it will say. `why`: the reason in one line the user can check.
+- `item`: the entry, named as `profile.md` names it, even after an earlier step renames it. `from`: what the field says now, word for word from `profile.md` (`""` if it's empty). `to`: what it will say. `why`: the reason in one line the user can check.
 - Put the steps in the order a person would do them: headline, About, each role (title and dates, then its description), education, projects, skills (add, then reorder, then remove), then the rest.
 
 What may go in a plan:
 
-- **Text** for the headline, the About and every description comes from `suggested.md`, word for word. If the text you need isn't there, write it there first and run the script's `limits` on it. One headline: the one the user picked, otherwise the one you recommended.
+- **Text** for the headline, the About and every experience or project description comes from `suggested.md`, word for word. A description for education, volunteering or another section stays out of a plan: give the user that text to paste themselves. If the text you need isn't there, write it there first and run the script's `limits` on it. One headline: the one the user picked, otherwise the one you recommended.
 - **Fix:** each mismatch and hard-to-defend claim the user agreed to fix: titles and dates to match the CV, descriptions, the About.
 - **Add:** only what the CV, the code or the user's own words support. A project the user wrote. A skill their code or CV shows. A role, a degree or a certificate that is on the CV and missing from the profile, with the CV's exact title, organisation and dates. A Featured link to their own public repository or site. Never something to fill a gap or to impress.
 - **Rearrange:** the order of skills (the five the code backs up best first), of Featured items and of projects, where LinkedIn lets entries be moved. LinkedIn orders roles and education by date itself: never change a date to move an entry.
