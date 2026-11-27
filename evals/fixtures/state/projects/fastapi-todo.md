@@ -24,7 +24,7 @@ Taskly is a small FastAPI CRUD service for todos. Each todo belongs to the API k
 | SQLAlchemy 2.0.35 | ORM using the 2.0 typed style (`DeclarativeBase`, `Mapped`, `select()`), **sync** engine and session | `requirements.txt:3`, `app/database.py:6-11`, `app/models.py:9-18` |
 | Pydantic 2.9.2 | Request and response schemas, `model_dump(exclude_unset=True)` | `requirements.txt:4`, `app/schemas.py:6-25` |
 | SQLite | Default database (file `taskly.db`); in-memory database for tests | `app/config.py:3`, `tests/test_todos.py:14` |
-| pytest 8.3.3 + httpx 0.27.2 | Tests through FastAPI `TestClient` | `requirements.txt:5-6`, `tests/test_todos.py:5,28` |
+| pytest 9.0.3 + httpx 0.27.2 | Tests through FastAPI `TestClient` | `requirements.txt:5-6`, `tests/test_todos.py:5,28` |
 | Docker | Single-stage container image | `Dockerfile:1-6` |
 
 Not present anywhere in the repo, despite being on the CV: PostgreSQL driver (psycopg/asyncpg), async SQLAlchemy, Redis, Celery, SMTP or email library, `email-validator`, pytest-cov, Alembic, docker-compose, CI config.
